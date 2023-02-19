@@ -1,0 +1,22 @@
+[package]
+name = "cubeast-connect"
+version = "1.0.0"
+edition = "2021"
+
+[[bin]]
+name = "cubeast-connect"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log = "0.4"
+pretty_env_logger = "0.4.0"
+thiserror = "1.0"
+anyhow = "1.0"
+serde_json = "1.0.91"
+serde = { version = "*", features = ["derive"] }
+uuid = { version = "1.2.2", features = ["v4"] }
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.18.0"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+btleplug = "0.10.4"
