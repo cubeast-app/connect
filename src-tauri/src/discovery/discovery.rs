@@ -18,7 +18,7 @@ pub struct Discovery {
     last_devices: Vec<DiscoveredDevice>,
 }
 
-impl<'controller> Discovery {
+impl Discovery {
     fn new(controller: Controller, discovery_rx: Receiver<DiscoveryCommand>) -> Self {
         Self {
             controller,
@@ -91,14 +91,8 @@ impl<'controller> Discovery {
             let properties = peripheral.properties().await?;
             let id = peripheral.id().to_string();
 
-            let device = if let Some(properties) = properties {
-                DiscoveredDevice {
-                    id,
-                    name: properties.local_name,
-                    signal_strength: properties.rssi,
-                    address: Some(properties.address.to_string()),
-                    manufacturer_data: Some(properties.manufacturer_data),
-                }
+            let device: DiscoveredDevice = if let Some(properties) = properties {
+                (id, properties).into()
             } else {
                 DiscoveredDevice {
                     id,

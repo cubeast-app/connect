@@ -3,11 +3,13 @@ use std::collections::{HashMap, HashSet};
 use btleplug::platform::Peripheral;
 use uuid::Uuid;
 
-use crate::clients::Clients;
+use crate::{clients::Clients, server::message::broadcast::DiscoveredDevice};
 
 pub struct ConnectedDevice {
     pub clients: HashSet<Uuid>,
     pub peripheral: Peripheral,
+    pub device: DiscoveredDevice,
+    pub services: Vec<String>,
 }
 
 pub struct AppState {

@@ -7,16 +7,18 @@ use tokio::{net::TcpListener, sync::Mutex};
 use tokio_tungstenite;
 
 pub struct Server {
-    requests: Controller,
+    controller: Controller,
 }
 
 impl Server {
-    pub async fn start(requests: Controller) {
-        Self::new(requests).run().await;
+    pub async fn start(controller: Controller) {
+        tokio::spawn(async move {
+            Self::new(controller).run().await;
+        });
     }
 
-    fn new(requests: Controller) -> Self {
-        Self { requests }
+    fn new(controller: Controller) -> Self {
+        Self { controller }
     }
 
     async fn run(&self) {
@@ -35,9 +37,9 @@ impl Server {
 
             let write = Arc::new(Mutex::new(write));
 
-            let client_id = self.requests.add_client(write.clone()).await;
+            let client_id = self.controller.add_client(write.clone()).await;
 
-            ServerConnection::start(read, write, self.requests.clone(), client_id);
+            ServerConnection::start(read, write, self.controller.clone(), client_id);
         }
     }
 }
