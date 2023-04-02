@@ -9,5 +9,5 @@ pub async fn bluetooth_adapter() -> Result<Adapter, Error> {
     adapters
         .into_iter()
         .nth(0)
-        .ok_or_else(|| Error::NotSupported("No adapters found".to_string()))
+        .ok_or_else(|| Error::NotSupported("No Bluetooth adapters found".to_string()))
 }

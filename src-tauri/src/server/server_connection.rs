@@ -64,6 +64,8 @@ impl ServerConnection {
                 sink.send(response).await.unwrap();
             })
             .await;
+
+        self.controller.remove_client(self.client_id).await;
     }
 
     async fn handle_message(&self, message: Option<Message>) -> Message {
@@ -95,21 +97,31 @@ impl ServerConnection {
                 Response::Ok
             }
             Request::Connect { id: name } => {
-                let result = self.controller.connect(name, self.client_id).await;
+                let result = self.controller.connect_device(name, self.client_id).await;
 
-                if let Ok(_) = result {
-                    Response::Ok
+                if let Ok(discovered_device) = result {
+                    Response::Connected {
+                        device: discovered_device.0,
+                        services: discovered_device.1,
+                    }
                 } else {
-                    Response::Error(String::from("Failed to connect"))
+                    Response::Error {
+                        error: String::from("Failed to connect"),
+                    }
                 }
             }
             Request::Disconnect { id: name } => {
-                let result = self.controller.disconnect(name, self.client_id).await;
+                let result = self
+                    .controller
+                    .disconnect_device(name, self.client_id)
+                    .await;
 
                 if let Ok(_) = result {
                     Response::Ok
                 } else {
-                    Response::Error(String::from("Failed to disconnect"))
+                    Response::Error {
+                        error: String::from("Failed to disconnect"),
+                    }
                 }
             }
             Request::Version => Response::Version { version: VERSION },

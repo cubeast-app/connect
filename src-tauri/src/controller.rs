@@ -4,7 +4,7 @@ use btleplug::{
     api::{Central, Peripheral},
     Error,
 };
-use log::info;
+use log::{info, warn};
 use tokio::{
     sync::{
         mpsc::{error::SendError, Sender},
@@ -47,7 +47,15 @@ impl Controller {
 
     pub async fn add_client(&self, client: Client) -> Uuid {
         let mut app_state = self.app_state.lock().await;
-        app_state.clients.add(client).await
+        app_state.clients.add(client)
+    }
+
+    pub async fn remove_client(&self, client_id: Uuid) {
+        let mut app_state = self.app_state.lock().await;
+        app_state.clients.remove(client_id);
+        drop(app_state);
+
+        self.remove_discovery_client(client_id).await;
     }
 
     pub async fn add_discovery_client(&self, client_id: Uuid) {
@@ -69,9 +77,22 @@ impl Controller {
 
             tokio::spawn(async move {
                 time::sleep(Duration::from_millis(STOP_DISCOVERY_TIMEOUT)).await;
-                Controller::new(app_state, discovery_tx, broadcaster_tx)
+                Controller::new(app_state.clone(), discovery_tx, broadcaster_tx.clone())
                     .remove_discovery_client(client_id)
                     .await;
+                let app_state = app_state.lock().await;
+                let discovery_stopped_broadcast = broadcaster_tx
+                    .send(BroadcastCommand {
+                        clients: app_state.clients.get_by_ids(&[client_id]),
+                        broadcast: Broadcast::DiscoveryStopped,
+                    })
+                    .await;
+                if let Err(error) = discovery_stopped_broadcast {
+                    warn!(
+                        "Failed to send discovery stopped broadcast to {}: {}",
+                        client_id, error
+                    );
+                }
             });
         }
     }
@@ -79,9 +100,9 @@ impl Controller {
     pub async fn remove_discovery_client(&self, client_id: Uuid) {
         let mut app_state = self.app_state.lock().await;
 
-        app_state.discovery_clients.remove(&client_id);
+        let removed = app_state.discovery_clients.remove(&client_id);
 
-        if app_state.discovery_clients.is_empty() {
+        if app_state.discovery_clients.is_empty() && removed {
             self.discovery_tx
                 .send(DiscoveryCommand::Stop)
                 .await
@@ -89,50 +110,77 @@ impl Controller {
         }
     }
 
-    pub async fn connect(&self, id: String, client_id: Uuid) -> Result<(), Error> {
+    pub async fn connect_device(
+        &self,
+        device_id: String,
+        client_id: Uuid,
+    ) -> Result<(DiscoveredDevice, Vec<String>), Error> {
         let adapter = bluetooth_adapter().await?;
         let peripherals = adapter.peripherals().await?;
-        let peripheral = peripherals.iter().find(|p| p.id().to_string() == id);
+        let peripheral = peripherals.iter().find(|p| p.id().to_string() == device_id);
 
         if let Some(peripheral) = peripheral {
             let mut app_state = self.app_state.lock().await;
 
-            if let Some(connected_device) = app_state.connected_devices.get_mut(&id) {
+            let discovered_device = if let Some(connected_device) =
+                app_state.connected_devices.get_mut(&device_id)
+            {
                 connected_device.clients.insert(client_id);
+                (
+                    connected_device.device.clone(),
+                    connected_device.services.clone(),
+                )
             } else {
                 peripheral.connect().await?;
+                let properties = peripheral
+                    .properties()
+                    .await?
+                    .ok_or(Error::DeviceNotFound)?;
+                let discovered_device: DiscoveredDevice = (device_id.clone(), properties).into();
+                peripheral.discover_services().await?;
 
-                info!("Connected to {}", id);
+                // services BTree as Vec
+                let services: Vec<String> = peripheral
+                    .services()
+                    .iter()
+                    .map(|s| s.uuid.to_string())
+                    .collect();
+
+                info!("Connected to {}", device_id);
 
                 let mut clients = HashSet::new();
                 clients.insert(client_id);
 
                 app_state.connected_devices.insert(
-                    id.clone(),
+                    device_id.clone(),
                     ConnectedDevice {
                         clients,
                         peripheral: peripheral.clone(),
+                        device: discovered_device.clone(),
+                        services: services.clone(),
                     },
                 );
-            }
 
-            Ok(())
+                (discovered_device, services)
+            };
+
+            Ok(discovered_device)
         } else {
             Err(Error::DeviceNotFound)
         }
     }
 
-    pub async fn disconnect(&self, id: String, client_id: Uuid) -> Result<(), Error> {
+    pub async fn disconnect_device(&self, device_id: String, client_id: Uuid) -> Result<(), Error> {
         let mut app_state = self.app_state.lock().await;
 
-        if let Some(connected_device) = app_state.connected_devices.get_mut(&id) {
+        if let Some(connected_device) = app_state.connected_devices.get_mut(&device_id) {
             connected_device.clients.remove(&client_id);
 
             if connected_device.clients.is_empty() {
                 connected_device.peripheral.disconnect().await?;
-                app_state.connected_devices.remove(&id);
+                app_state.connected_devices.remove(&device_id);
 
-                info!("Disconnected from {}", id);
+                info!("Disconnected from {}", device_id);
             }
         }
 
@@ -144,16 +192,13 @@ impl Controller {
         discovered_devices: Vec<DiscoveredDevice>,
     ) -> Result<(), SendError<BroadcastCommand>> {
         let app_state = self.app_state.lock().await;
-        let discovery_clients = app_state
-            .clients
-            .get_by_ids(
-                &(app_state
-                    .discovery_clients
-                    .clone()
-                    .into_iter()
-                    .collect::<Vec<_>>()),
-            )
-            .await;
+        let discovery_clients = app_state.clients.get_by_ids(
+            &(app_state
+                .discovery_clients
+                .clone()
+                .into_iter()
+                .collect::<Vec<_>>()),
+        );
         self.broadcaster_tx
             .send(BroadcastCommand {
                 broadcast: Broadcast::DiscoveredDevices {

@@ -18,18 +18,22 @@ impl Clients {
         }
     }
 
-    pub async fn add(&mut self, client: Client) -> Uuid {
+    pub fn add(&mut self, client: Client) -> Uuid {
         let client_id = Uuid::new_v4();
         self.internal.insert(client_id, client);
 
         client_id
     }
 
-    pub async fn remove(&mut self, client_id: Uuid) {
+    pub fn remove(&mut self, client_id: Uuid) {
         self.internal.remove(&client_id);
     }
 
-    pub async fn get_by_ids(&self, client_ids: &[Uuid]) -> HashMap<Uuid, Client> {
+    pub fn len(&self) -> usize {
+        self.internal.len()
+    }
+
+    pub fn get_by_ids(&self, client_ids: &[Uuid]) -> HashMap<Uuid, Client> {
         client_ids
             .iter()
             .filter_map(|client_id| {
