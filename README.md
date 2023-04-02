@@ -2,7 +2,15 @@
 
 ## Status
 
-In development. Currently working on basic functionality. After that's done I'll be working on the UI.
+[x] UI
+[x] Discovering devices
+[x] Connecting to devices
+[x] Connecting to services
+[ ] Reading and writing from/to characteristics
+[ ] Subscribing to characteristics
+[ ] Building Linux packages
+[ ] Building the Windows packa
+[ ] Building the MacOS package
 
 ## About
 
@@ -19,6 +27,7 @@ Currently the app exposes a Websocket API on port 17430. Example of an exchange:
 -> {"type":"request", "id":"1", "request":{"method":"version"}}
 <- {"type":"response","id":"1","response":{"result":"version","version":1}}
 -> {"type":"request", "id":"2", "request":{"method":"start-discovery"}}
+<- {"type":"response","id":"2","response":{"result":"ok"}}
 <- {"type":"broadcast","broadcast":{"name":"discovered-devices","devices":[{"id":"hci0/dev_E7_25_86_0E_40_5B","name":"GAN-ST05B","address":"E7:25:86:0E:40:5B","signal_strength":null,"manufacturer_data":{}}]}}
 -> {"type":"request", "id":"3", "request":{"method":"stop-discovery"}}
 <- {"type":"response","id":"3","response":{"result":"ok"}}
