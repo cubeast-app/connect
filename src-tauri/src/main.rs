@@ -68,7 +68,11 @@ async fn main() {
                 }
                 "open" => {
                     let window = app.get_window("main").unwrap();
-                    window.maximize().unwrap();
+                    // doesn't guarantee that window is brought to front
+                    // but should work for most desktops.
+                    window.show().unwrap();
+                    window.unminimize().unwrap(); 
+                    window.set_focus().unwrap();
                 }
                 _ => {
                     eprintln!("Unknown menu item: {}", id);
