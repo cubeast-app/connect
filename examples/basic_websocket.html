@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Basic Websocket Example</title>
+  </head>
+  <body>
+    <style>
+        :root {
+            color-scheme: dark light;
+        }
+    </style>
+    <div id="out"></div>
+    <button id="broadcast_control" disabled>Stop Broadcast</button>
+    <script type="module">
+        const Socket = () => {
+            const pendingMessages = {}; // establish an index of promises waiting for a message.id
+            let broadcastWaiters = []; // promises waiting for a broadcast
+            /** @type {WebSocket} */
+            let webSocket;
+        
+            // push message to broadcasters and clear list
+            const onbroadcast = (message) => {
+                for (const broadcastWaiter of broadcastWaiters) {
+                    try {
+                        broadcastWaiter(message);
+                    } catch (e) {
+                        console.error(e);
+                    }
+                }
+                for (let i = 0; i < broadcastWaiters.length; i++) {
+                    delete broadcastWaiters[i];
+                }
+                broadcastWaiters = [];
+            }
+        
+            /**
+             * Utility method to automatically give back response using a random ID
+             * 
+             * @param {{type: string, request: any}} data
+             * @param {boolean} expectReturn
+             * @returns {Promise<any>}
+             */
+            const send = (data, expectReturn = true) => {
+                return new Promise((resolve, reject) => {
+                    if (!webSocket) {
+                        console.error("WebSocket not initialised");
+                        reject();
+                    }
+                    if (webSocket.readyState != webSocket.OPEN) {
+                        console.error("WebSocket is not ready to send messages");
+                        reject();
+                    }
+                    
+                    const id = crypto.randomUUID();
+                    if (expectReturn) {
+                        pendingMessages[id] = resolve;
+                    }
+                    webSocket.send(JSON.stringify({
+                        id: id,
+                        ...data,
+                    }));
+                    if (!expectReturn) {
+                        resolve();
+                    }
+                })
+            }
+        
+            /**
+             * 
+             * @param {MessageEvent} event
+             */
+            const onmessage = (event) => {
+                /** @type {{target: WebSocket, data: string}} */
+                const { target: ws, data } = event;
+        
+                let message;
+                if (!data) {
+                    console.log("Recieved empty WS message");
+                    return;
+                }
+                try {
+                    message = JSON.parse(data);
+                } catch (e) {
+                    if (e instanceof SyntaxError) {
+                        console.log("Received Message was not valid JSON");
+                        return;
+                    } else {
+                        console.error(e);
+                        return;
+                    }
+                }
+                // if message has an ID we have some body waiting for it
+                if (message.id != undefined && message.id in pendingMessages) {            
+                    pendingMessages[message.id](message);
+                    delete pendingMessages[message.id];
+                } else {
+                    if (message.type === "broadcast") {
+                        onbroadcast(message);
+                    }
+                }
+        
+            };
+            
+
+                       
+            const connect = async (url, timeoutMs = 5000) => {
+                return new Promise((resolve, reject) => {
+                    if (webSocket) {
+                        reject("WebSocket already initialised");
+                    }
+                    try {
+                        webSocket = new WebSocket(url);
+                    } catch (e) {
+                        console.error(e);
+                        reject("Error connecting to web socket");
+                    }
+                    let rejectTimeout;
+                    if (timeoutMs) {
+                        rejectTimeout = setTimeout(() => {
+                            console.error(`WebSocket timed out: took more than ${timeoutMs}ms`);
+                            reject("Timed out");
+                        }, timeoutMs);
+                    }
+                    webSocket.addEventListener("open", () => {
+                        if (timeoutMs) clearTimeout(rejectTimeout);
+                        resolve();
+                    });
+                    webSocket.addEventListener("message", onmessage);
+                })
+            };
+        
+            const broadcast = (timeoutMs = 10000) => {
+                return new Promise((resolve, reject) => {
+                    let timedOut = false;
+                    let rejectTimeout;
+                    if (timeoutMs) {
+                        rejectTimeout = setTimeout(() => {
+                            console.log(`broadcast timed out: took more than ${timeoutMs}ms`);
+                            timedOut = true;
+                            reject("Timed out");
+                        }, timeoutMs); 
+                    }
+                    broadcastWaiters.push((message) => {
+                        if (timeoutMs) {
+                            clearTimeout(rejectTimeout);
+                            if (timedOut) {
+                                return;
+                            }
+                        }
+                        resolve(message);
+                    });
+                })
+            }
+        
+            const close = () => {
+                if (webSocket) {
+                    webSocket.close();
+                };
+            }
+        
+            return {
+                send, connect, broadcast, close,
+                get ws() {
+                    return webSocket;
+                },
+                get queue() {
+                    return pendingMessages;
+                },
+            }
+        
+        }
+        
+        const App = async () => {
+            /** @type {HTMLDivElement} */
+            const output = document.querySelector("#out");
+            /** @type {HTMLButtonElement} */
+            const control = document.querySelector("#broadcast_control");
+            const socket = Socket();
+            const {send, connect, ws, queue, close, broadcast} = socket;
+        
+        
+            try {
+                await connect(new URL("ws://127.0.0.1:17430"));
+                output.innerHTML += `<p>Connected</p>`;
+            } catch (e) {
+                output.innerHTML += `<p>Failed to connect</p>`;
+                return;
+            }
+            let resp;
+            resp = await send({
+                type: "request",
+                request: {
+                    name: "version"
+                }
+            });
+            output.innerHTML += `<p>Server Version: ${resp.response.version}</p>`;
+            resp = await send({
+                type: "request",
+                request: {
+                    name: "start-discovery"
+                }
+            });
+            if (resp.response.result !== "ok") {
+                output.innerText += `Failed to start discovery\n`;
+                close();
+                return;
+            }
+            output.innerHTML += `<p>Started Discovery, waiting for a broadcast</p>`;
+            
+            control.removeAttribute("disabled");
+            const updateBroadcast = async () => {
+                try {
+                    const bsMessage = await broadcast();
+                    if (bsMessage.broadcast.name === "discovered-devices") {
+                        const deviceRow = (device) => {
+                            return `<tr><td>${device.name}</td><td>${device.address}</td></tr>`
+                        }
+                        output.innerHTML += `<table>
+                        <caption>
+                            Discovered Devices
+                        </caption>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>MAC</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        ${bsMessage.broadcast.devices.map(deviceRow).join("")}
+                        </tbody>
+                        </table>`;
+                    }
+                } catch (e) {
+                    console.error(e);
+                    control.click();
+                }
+            }
+            await updateBroadcast();
+            const broadcastChecker = setInterval(updateBroadcast, 10000);
+            control.addEventListener("click", async () => {
+                clearInterval(broadcastChecker);
+                control.setAttribute("disabled", "true");
+        
+                resp = await send({
+                    type: "request",
+                    request: {
+                        name: "stop-discovery",
+                    }
+                });
+                
+                if (resp.response.result !== "ok") {
+                    output.innerHTML += `<p>Failed to stop discovery</p>`;
+                }
+                close();
+                output.innerHTML += `<p>Closed Socket</p>`;  
+                });
+        }
+        
+        App();
+    </script>
+  </body>
+</html>
