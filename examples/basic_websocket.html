@@ -12,28 +12,61 @@
             color-scheme: dark light;
         }
     </style>
-    <div id="out"></div>
-    <button id="broadcast_control" disabled>Stop Broadcast</button>
+    <table id="devices">
+        <caption>Devices</caption>
+        <thead>
+            <tr>
+                <td>Name</td>
+                <td>ID</td>
+            </tr>
+        </thead>
+        <tbody id="devices_tbody">
+
+        </tbody>
+    </table>
+    <table id="controls">
+        <tbody>
+            <tr>
+                <td><button id="discovery_control">Start/Stop Discovery</button></td>
+                <td><button id="refresh_devices">Refresh Devices</button></td>
+                <td><button id="disconnect">Disconnect</button></td>
+                <td><button id="connect">Connect</button></td>
+            </tr>
+            <tr>
+                <td><input id="device_id" type="text" placeholder="AA:BB:CC:DD:EE:FF"></td>
+                <td><button id="connect_to_device">Connect to Device</td>
+                <td><button id="disconnect_from_device">Disconnect from Device</td>
+            </tr>
+        </tbody>
+    </table>
+    <textarea id="device_info"></textarea>
+    <ul id="logs">
+
+    </ul>
     <script type="module">
-        const Socket = () => {
+        const Socket = () => {  
             const pendingMessages = {}; // establish an index of promises waiting for a message.id
-            let broadcastWaiters = []; // promises waiting for a broadcast
+            let deviceRefreshWaiters = []; // promises waiting for a broadcast
             /** @type {WebSocket} */
             let webSocket;
         
+            const clearDeviceRefreshWaiters = () => {
+                for (let i = 0; i < deviceRefreshWaiters.length; i++) {
+                    delete deviceRefreshWaiters[i];
+                }
+                deviceRefreshWaiters.length = 0;
+            }
+        
             // push message to broadcasters and clear list
             const onbroadcast = (message) => {
-                for (const broadcastWaiter of broadcastWaiters) {
+                for (const broadcastWaiter of deviceRefreshWaiters) {
                     try {
                         broadcastWaiter(message);
                     } catch (e) {
                         console.error(e);
                     }
                 }
-                for (let i = 0; i < broadcastWaiters.length; i++) {
-                    delete broadcastWaiters[i];
-                }
-                broadcastWaiters = [];
+                clearDeviceRefreshWaiters();
             }
         
             /**
@@ -104,7 +137,7 @@
         
             };
             
-
+        
                        
             const connect = async (url, timeoutMs = 5000) => {
                 return new Promise((resolve, reject) => {
@@ -132,18 +165,18 @@
                 })
             };
         
-            const broadcast = (timeoutMs = 10000) => {
+            const refreshDevices = (timeoutMs = 10000) => {
                 return new Promise((resolve, reject) => {
                     let timedOut = false;
                     let rejectTimeout;
                     if (timeoutMs) {
                         rejectTimeout = setTimeout(() => {
-                            console.log(`broadcast timed out: took more than ${timeoutMs}ms`);
+                            console.log(`Device refresh timed out: took more than ${timeoutMs}ms`);
                             timedOut = true;
                             reject("Timed out");
                         }, timeoutMs); 
                     }
-                    broadcastWaiters.push((message) => {
+                    deviceRefreshWaiters.push((message) => {
                         if (timeoutMs) {
                             clearTimeout(rejectTimeout);
                             if (timedOut) {
@@ -157,12 +190,19 @@
         
             const close = () => {
                 if (webSocket) {
-                    webSocket.close();
+                    try {
+                        webSocket.close();
+                    } catch {}
+                    webSocket = undefined;
+                    for (const key of Object.keys(pendingMessages)) {
+                        delete pendingMessages[key];
+                    }
+                    clearDeviceRefreshWaiters();
                 };
             }
         
             return {
-                send, connect, broadcast, close,
+                send, connect, refreshDevices, close,
                 get ws() {
                     return webSocket;
                 },
@@ -175,76 +215,68 @@
         
         const App = async () => {
             /** @type {HTMLDivElement} */
-            const output = document.querySelector("#out");
-            /** @type {HTMLButtonElement} */
-            const control = document.querySelector("#broadcast_control");
+            const logs = document.querySelector("#logs");
+            /** @type {HTMLTableSectionElement} */
+            const devices_tbody = document.querySelector("#devices_tbody");
+            /** @type {HTMLTextAreaElement} */
+            const device_info = document.querySelector("#device_info");
+            const controls = {
+                discovery: document.querySelector("#discovery_control"),
+                refresh_devices: document.querySelector("#refresh_devices"),
+                connect: document.querySelector("#connect"),
+                disconnect: document.querySelector("#disconnect"),
+                device_id: document.querySelector("#device_id"),
+                connect_to_device: document.querySelector("#connect_to_device"),
+                disconnect_from_device: document.querySelector("#disconnect_from_device"),
+            };
             const socket = Socket();
-            const {send, connect, ws, queue, close, broadcast} = socket;
+            const {send, connect, ws, queue, close, refreshDevices} = socket;
+        
+            const log = (str) => {
+                const logElement = document.createElement("li");
+                logElement.innerText = str;
+                logs.appendChild(logElement);
+            }
+        
+            const displayDevices = (devices) => {
+                devices_tbody.innerHTML = "";
+                for (const device of devices) {
+                    const row = document.createElement("tr");
+                    const nameCol = document.createElement("td");
+                    const addressCol = document.createElement("td");
+                    nameCol.innerText = device.name;
+                    addressCol.innerText = device.id;
+                    row.appendChild(nameCol);
+                    row.appendChild(addressCol);
+                    devices_tbody.appendChild(row);
+                }
+            };
         
         
-            try {
-                await connect(new URL("ws://127.0.0.1:17430"));
-                output.innerHTML += `<p>Connected</p>`;
-            } catch (e) {
-                output.innerHTML += `<p>Failed to connect</p>`;
-                return;
-            }
-            let resp;
-            resp = await send({
-                type: "request",
-                request: {
-                    name: "version"
-                }
-            });
-            output.innerHTML += `<p>Server Version: ${resp.response.version}</p>`;
-            resp = await send({
-                type: "request",
-                request: {
-                    name: "start-discovery"
-                }
-            });
-            if (resp.response.result !== "ok") {
-                output.innerText += `Failed to start discovery\n`;
-                close();
-                return;
-            }
-            output.innerHTML += `<p>Started Discovery, waiting for a broadcast</p>`;
-            
-            control.removeAttribute("disabled");
-            const updateBroadcast = async () => {
-                try {
-                    const bsMessage = await broadcast();
-                    if (bsMessage.broadcast.name === "discovered-devices") {
-                        const deviceRow = (device) => {
-                            return `<tr><td>${device.name}</td><td>${device.address}</td></tr>`
-                        }
-                        output.innerHTML += `<table>
-                        <caption>
-                            Discovered Devices
-                        </caption>
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>MAC</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        ${bsMessage.broadcast.devices.map(deviceRow).join("")}
-                        </tbody>
-                        </table>`;
+            let discoveryStarted = false;
+            let connected = false;
+            let device = null;
+        
+            const startDiscovery = async () => {
+                if (!connected) return false;
+                let resp = await send({
+                    type: "request",
+                    request: {
+                        name: "start-discovery"
                     }
-                } catch (e) {
-                    console.error(e);
-                    control.click();
+                });
+                if (resp.response.result !== "ok") {
+                    log(`Failed to start discovery`);
+                    return false;
                 }
+                log("Discovery started");
+                discoveryStarted = true;
+                return true;
             }
-            await updateBroadcast();
-            const broadcastChecker = setInterval(updateBroadcast, 10000);
-            control.addEventListener("click", async () => {
-                clearInterval(broadcastChecker);
-                control.setAttribute("disabled", "true");
         
-                resp = await send({
+            const stopDiscovery = async () => {
+                if (!connected) return false;
+                let resp = await send({
                     type: "request",
                     request: {
                         name: "stop-discovery",
@@ -252,11 +284,137 @@
                 });
                 
                 if (resp.response.result !== "ok") {
-                    output.innerHTML += `<p>Failed to stop discovery</p>`;
+                    log("Failed to stop discovery");
+                    return false;
                 }
+                discoveryStarted = false;
+                log(`Discovery stopped`); 
+                return true;
+            }
+        
+            const closeConnection = async () => {
+                if (!connected) return true;
                 close();
-                output.innerHTML += `<p>Closed Socket</p>`;  
+                log(`Disconnected`);
+                connected = false;
+                discoveryStarted = false;
+            }
+        
+            const setupConnection = async () => {
+                if (connected) return true;
+                try {
+                    await connect(new URL("ws://127.0.0.1:17430"));
+                    console.log(ws);
+                    log("Connected");
+                } catch (e) {
+                    log("Failed to connect");
+                    return false;
+                }
+                let resp;
+                resp = await send({
+                    type: "request",
+                    request: {
+                        name: "version"
+                    }
                 });
+                log(`Server Version: ${resp.response.version}`);
+                connected = true;
+                return true;
+            }
+        
+            const connectToDevice = async (device_id) => {
+                if (!connected) return false;
+                if (device) return false;
+        
+                let resp = await send({
+                    type: "request",
+                    request: {
+                        name: "connect",
+                        id: device_id,
+                    }
+                });
+                if (resp?.response?.result !== "connected") {
+                    log(`Failed to connect to device: ${resp.response?.error ?? "unknown error"}`)
+                    return false;
+                }
+                log(`Connected to device with id ${device_id}`);
+                device = resp.response.device;
+                return true;
+            }
+        
+            const disconnectFromDevice = async () => {
+                if (!connected) return false;
+                
+                if (!device) return true;
+        
+                let resp = await send({
+                    type: "request",
+                    request: {
+                        name: "disconnect",
+                        id: device.id,
+                    }
+                });
+                if (resp?.response?.result !== "ok") {
+                    log(`Failed to disconnect from device: ${resp.response?.error ?? "unknown error"}`)
+                    return false;
+                }
+                log(`Disconnected from Device with id ${device.id}`);
+                device = null;
+                return true;
+        
+            }
+        
+            controls.discovery.addEventListener("click", async () => {
+                if (discoveryStarted) {
+                    if (await stopDiscovery()) {
+                    }
+                } else {
+                    if (await startDiscovery()) {
+                    }
+                }
+            });
+        
+            controls.connect.addEventListener("click", async () => {
+                if (connected) return;
+                if (await setupConnection()) {
+                }
+            });
+        
+            controls.disconnect.addEventListener("click", async () => {
+                if (!connected) return;
+                await closeConnection();
+            })    
+        
+            controls.refresh_devices.addEventListener("click", async () => {
+                if (discoveryStarted) {
+                    let message;
+                    try {
+                        message = await refreshDevices();
+                    } catch {
+                        log("Device Refresh timed out");
+                    }
+        
+                    displayDevices(message?.broadcast?.devices ?? []);
+                }
+            })
+            
+            controls.connect_to_device.addEventListener("click", async () => {
+                if (connected && !device) {
+                    const device_id = controls.device_id.value;
+                    if (await connectToDevice(device_id)) {
+                        device_info.innerText = JSON.stringify(device);
+                    }
+        
+                }
+            })
+        
+            controls.disconnect_from_device.addEventListener("click", async () => {
+                if (connected) {
+                    await disconnectFromDevice();
+                }
+            })
+           
+                
         }
         
         App();
