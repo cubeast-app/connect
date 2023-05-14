@@ -1,89 +1,78 @@
 use btleplug::api::{Central, CentralEvent, Peripheral, ScanFilter};
 use btleplug::platform::Adapter;
 use btleplug::Error;
-use futures_util::StreamExt;
+use futures_util::{select, FutureExt, StreamExt};
 use log::{info, warn};
-use tokio::select;
 use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::{channel, Sender};
 
-use crate::adapter::bluetooth_adapter;
-use crate::controller::Controller;
-use crate::server::message::broadcast::DiscoveredDevice;
+use crate::discovered_device::DiscoveredDevice;
+use crate::events::Events;
 
-use super::discovery_command::DiscoveryCommand;
+const CAPACITY: usize = 1;
 
 pub struct Discovery {
-    controller: Controller,
-    discovery_rx: Receiver<DiscoveryCommand>,
-    last_devices: Vec<DiscoveredDevice>,
+    adapter: Adapter,
+    events: Events,
+    stop_rx: Receiver<()>,
 }
 
 impl Discovery {
-    fn new(controller: Controller, discovery_rx: Receiver<DiscoveryCommand>) -> Self {
+    fn new(adapter: Adapter, events: Events, stop_rx: Receiver<()>) -> Self {
         Self {
-            controller,
-            discovery_rx,
-            last_devices: vec![],
+            adapter,
+            events,
+            stop_rx,
         }
     }
 
-    pub async fn start(controller: Controller, discovery_rx: Receiver<DiscoveryCommand>) {
-        let adapter = bluetooth_adapter()
-            .await
-            .expect("Cubeast Connect was unable to connect to Bluetooth");
+    pub async fn start(adapter: Adapter, events: Events) -> Sender<()> {
+        let (stop_tx, stop_rx) = channel::<()>(CAPACITY);
 
         info!("Using adapter {:?}", adapter.adapter_info().await.unwrap());
 
-        let mut discovery = Discovery::new(controller, discovery_rx);
-
         tokio::spawn(async move {
-            discovery.run(adapter).await;
+            let mut discovery = Discovery::new(adapter, events, stop_rx);
+            discovery.run().await;
         });
+
+        stop_tx
     }
 
-    async fn run(&mut self, adapter: Adapter) {
-        let mut events = adapter.events().await.unwrap();
+    async fn run(&mut self) {
+        let mut events = self.adapter.events().await.unwrap();
+        self.adapter
+            .start_scan(ScanFilter::default())
+            .await
+            .unwrap();
 
         loop {
             select! {
-                command = self.discovery_rx.recv() => {
-                    if let Some(command) = command {
-                        self.handle_client_command(&adapter, command).await;
-                    }
+                _ = self.stop_rx.recv().fuse() => {
+                    info!("Stopping discovery");
+                    self.adapter.stop_scan().await.unwrap();
+                    return;
                 },
-                event = events.next() => {
-                    if let Some(event) = event {
-                        if let Err(err) = self.handle_central_event(event, &adapter).await {
-                            warn!("Error handling central event: {:?}", err)
+                event = events.next().fuse() => {
+                    match event {
+                        Some(CentralEvent::DeviceDiscovered(_))
+                        | Some(CentralEvent::DeviceUpdated(_))
+                        | Some(CentralEvent::ManufacturerDataAdvertisement { .. }) => {
+                            if let Err(err) = self.handle_discovery_event().await {
+                                warn!("Error handling central event: {:?}", err)
+                            }
                         }
-                    }
-                },
-            }
-        }
-    }
+                        _ => {}
+                    };
 
-    async fn handle_client_command(&mut self, adapter: &Adapter, command: DiscoveryCommand) {
-        match command {
-            DiscoveryCommand::Start => {
-                adapter.start_scan(ScanFilter::default()).await.unwrap();
-                info!("Started discovery");
-            }
-            DiscoveryCommand::Stop => {
-                if let Err(error) = adapter.stop_scan().await {
-                    warn!("Error stopping discovery: {:?}", error);
-                } else {
-                    info!("Stopped discovery");
                 }
+
             }
         }
     }
 
-    async fn handle_central_event(
-        &mut self,
-        _event: CentralEvent,
-        adapter: &Adapter,
-    ) -> Result<(), Error> {
-        let peripherals = adapter.peripherals().await?;
+    async fn handle_discovery_event(&mut self) -> Result<(), Error> {
+        let peripherals = self.adapter.peripherals().await?;
 
         let mut discovered_devices = vec![];
 
@@ -108,15 +97,8 @@ impl Discovery {
 
         discovered_devices.sort_by(|a, b| a.name.cmp(&b.name));
 
-        if self.last_devices.eq(&discovered_devices) {
-            return Ok(());
-        }
+        self.events.on_discovery(discovered_devices).await;
 
-        self.last_devices = discovered_devices.clone();
-
-        self.controller
-            .update_discovered_devices(discovered_devices)
-            .await
-            .map_err(|err| Error::Other(Box::new(err)))
+        Ok(())
     }
 }

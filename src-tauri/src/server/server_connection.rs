@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
-use log::warn;
+use log::{info, warn};
 use tokio::{net::TcpStream, sync::Mutex};
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::{self, tungstenite::Message as TungsteniteMessage};
@@ -38,6 +38,8 @@ impl ServerConnection {
     }
 
     async fn run(&self, read: SplitStream<WebSocketStream<TcpStream>>) {
+        info!("Connected client {}", self.client_id);
+
         let json_messages = read.filter_map(|message| async {
             if let Ok(message) = message {
                 if let TungsteniteMessage::Text(text) = message {
@@ -65,14 +67,19 @@ impl ServerConnection {
             })
             .await;
 
-        self.controller.remove_client(self.client_id).await;
+        info!("Disconnected client {}", self.client_id);
+
+        self.controller
+            .remove_client(&self.client_id)
+            .await
+            .expect("Failed to remove client");
     }
 
     async fn handle_message(&self, message: Option<Message>) -> Message {
         if let Some(Message::Request { id, request }) = message {
             let response = self.handle_request(request).await;
             Message::Response { id, response }
-        } else if let Some(_) = message {
+        } else if message.is_some() {
             Message::Error {
                 message: String::from("Request expected"),
             }
@@ -86,18 +93,36 @@ impl ServerConnection {
     async fn handle_request(&self, request: Request) -> Response {
         match request {
             Request::StartDiscovery => {
-                self.controller.add_discovery_client(self.client_id).await;
-                Response::Ok
+                let result = self.controller.add_discovery_client(self.client_id).await;
+
+                if result.is_ok() {
+                    Response::Ok
+                } else {
+                    Response::Error {
+                        error: String::from("Failed to start discovery"),
+                    }
+                }
             }
             Request::Authenticate => todo!(),
             Request::StopDiscovery => {
-                self.controller
-                    .remove_discovery_client(self.client_id)
+                let result = self
+                    .controller
+                    .remove_discovery_client(&self.client_id)
                     .await;
-                Response::Ok
+
+                if result.is_ok() {
+                    Response::Ok
+                } else {
+                    Response::Error {
+                        error: String::from("Failed to stop discovery"),
+                    }
+                }
             }
             Request::Connect { id: name } => {
-                let result = self.controller.connect_device(name, self.client_id).await;
+                let result = self
+                    .controller
+                    .connect_client_to_device(name, self.client_id)
+                    .await;
 
                 if let Ok(discovered_device) = result {
                     Response::Connected {
@@ -113,14 +138,83 @@ impl ServerConnection {
             Request::Disconnect { id: name } => {
                 let result = self
                     .controller
-                    .disconnect_device(name, self.client_id)
+                    .disconnect_client_from_device(name, self.client_id)
                     .await;
 
-                if let Ok(_) = result {
+                if result.is_ok() {
                     Response::Ok
                 } else {
                     Response::Error {
                         error: String::from("Failed to disconnect"),
+                    }
+                }
+            }
+            Request::ReadCharacteristic {
+                device_id,
+                characteristic_id,
+            } => {
+                let result = self
+                    .controller
+                    .read_characteristic(device_id, characteristic_id)
+                    .await;
+
+                if let Ok(value) = result {
+                    Response::Value { value }
+                } else {
+                    Response::Error {
+                        error: String::from("Failed to read characteristic"),
+                    }
+                }
+            }
+            Request::WriteCharacteristic {
+                device_id,
+                characteristic_id,
+                value,
+            } => {
+                let result = self
+                    .controller
+                    .write_characteristic(device_id, characteristic_id, value)
+                    .await;
+
+                if result.is_ok() {
+                    Response::Ok
+                } else {
+                    Response::Error {
+                        error: String::from("Failed to write characteristic"),
+                    }
+                }
+            }
+            Request::SubscribeCharacteristic {
+                device_id,
+                characteristic_id,
+            } => {
+                let result = self
+                    .controller
+                    .subscribe_characteristic(self.client_id, device_id, characteristic_id)
+                    .await;
+
+                if result.is_ok() {
+                    Response::Ok
+                } else {
+                    Response::Error {
+                        error: String::from("Failed to subscribe characteristic"),
+                    }
+                }
+            }
+            Request::UnsubscribeCharacteristic {
+                device_id,
+                characteristic_id,
+            } => {
+                let result = self
+                    .controller
+                    .unsubscribe_characteristic(device_id, characteristic_id, &self.client_id)
+                    .await;
+
+                if result.is_ok() {
+                    Response::Ok
+                } else {
+                    Response::Error {
+                        error: String::from("Failed to unsubscribe characteristic"),
                     }
                 }
             }
