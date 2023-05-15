@@ -24,7 +24,10 @@
 
   ];
 
-  languages.rust.enable = true;
+  languages.rust = {
+    enable = true;
+    version = "stable";
+  };
   languages.javascript.enable = true;
   languages.typescript.enable = true;
 }

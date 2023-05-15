@@ -1,5 +1,5 @@
 use futures_util::SinkExt;
-use log::info;
+use log::{info, warn};
 use tokio::sync::mpsc::Receiver;
 use tokio_tungstenite::{self, tungstenite::Message as TungsteniteMessage};
 
@@ -12,7 +12,7 @@ pub struct Broadcaster {
 }
 
 impl Broadcaster {
-    pub async fn start(broadcaster_rx: Receiver<BroadcastCommand>) {
+    pub fn start(broadcaster_rx: Receiver<BroadcastCommand>) {
         let mut broadcaster = Self::new(broadcaster_rx);
 
         tokio::spawn(async move {
@@ -25,20 +25,23 @@ impl Broadcaster {
     }
 
     async fn run(&mut self) {
+        info!("Starting broadcaster");
+
         while let Some(command) = self.broadcaster_rx.recv().await {
+            info!("Broadcasting message: {}", command.broadcast);
             let serialized = serde_json::to_string(&Message::Broadcast {
                 broadcast: command.broadcast,
             })
             .unwrap();
 
-            for (client_id, client) in command.clients {
+            for client in command.clients {
                 let mut write = client.lock().await;
                 let write_result = write
                     .send(TungsteniteMessage::Text(serialized.clone()))
                     .await;
 
-                if let Err(_) = write_result {
-                    info!("Failed to broadcast a message to {}", client_id);
+                if write_result.is_err() {
+                    warn!("Failed to broadcast a message to client");
                 }
             }
         }
