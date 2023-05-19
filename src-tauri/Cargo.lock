@@ -551,6 +551,7 @@ dependencies = [
  "btleplug",
  "dyn-clone",
  "futures-util",
+ "http",
  "lets_expect",
  "log",
  "mockall",
