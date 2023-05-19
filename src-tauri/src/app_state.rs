@@ -63,6 +63,10 @@ impl<ClientType: Clone> AppState<ClientType> {
         !self.discovery_clients.is_empty()
     }
 
+    pub fn discovery_client_ids(&self) -> Vec<Uuid> {
+        self.discovery_clients.iter().cloned().collect()
+    }
+
     pub fn discovery_clients(&self) -> Vec<ClientType> {
         self.discovery_clients
             .iter()
@@ -142,7 +146,7 @@ mod tests {
             }
 
             when(mut state = state_with_one_discovery_client) {
-                let client_id = *state.client_ids().first().unwrap();
+                let client_id = *state.discovery_client_ids().first().unwrap();
 
                 to make(state.has_discovery_clients()) equal(false)
             }
@@ -151,23 +155,15 @@ mod tests {
         expect(state.add_discovery_client(client_id)) as add_discovery_client {
             when(mut state = state_with_one_client) {
                 let client_id = *state.client_ids().first().unwrap();
-                to make(state.has_discovery_clients()) equal(true)
+                to make(state.has_discovery_clients()) be_true
             }
         }
 
         expect(state.remove_discovery_client(&client_id)) as remove_discovery_client {
             when(mut state = state_with_one_discovery_client) {
-                let client_id = *state.client_ids().first().unwrap();
-                to make(state.has_discovery_clients()) equal(false)
+                let client_id = *state.discovery_client_ids().first().unwrap();
+                to make(state.has_discovery_clients()) be_false
             }
-        }
-
-        expect(state.add_connected_device(connected_device)) as add_connected_device {
-
-        }
-
-        expect(state.remove_connected_devices_with_no_clients()) as remove_connected_devices_with_no_clients {
-
         }
     }
 }

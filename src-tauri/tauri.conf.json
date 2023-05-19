@@ -21,9 +21,10 @@
     "bundle": {
       "active": true,
       "icon": [
-        "icons/icon.png"
+        "icons/icon.png",
+        "icons/icon.ico"
       ],
-      "identifier": "com.tauri.dev",
+      "identifier": "com.cubeast.connect",
       "targets": "all"
     },
     "security": {
