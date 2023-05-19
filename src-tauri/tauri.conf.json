@@ -7,7 +7,7 @@
     "withGlobalTauri": false
   },
   "package": {
-    "productName": "cubeast-connect",
+    "productName": "Cubeast Connect",
     "version": "0.0.0"
   },
   "tauri": {
@@ -21,7 +21,8 @@
     "bundle": {
       "active": true,
       "icon": [
-        "icons/icon.png"
+        "icons/icon.png",
+        "icons/icon.ico"
       ],
       "identifier": "com.cubeast.connect",
       "targets": "all"
