@@ -146,7 +146,7 @@ mod tests {
             }
 
             when(mut state = state_with_one_discovery_client) {
-                let client_id = *state.client_ids().first().unwrap();
+                let client_id = *state.discovery_client_ids().first().unwrap();
 
                 to make(state.has_discovery_clients()) equal(false)
             }
