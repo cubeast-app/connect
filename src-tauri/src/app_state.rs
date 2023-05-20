@@ -63,6 +63,7 @@ impl<ClientType: Clone> AppState<ClientType> {
         !self.discovery_clients.is_empty()
     }
 
+    #[cfg(test)]
     pub fn discovery_client_ids(&self) -> Vec<Uuid> {
         self.discovery_clients.iter().cloned().collect()
     }
