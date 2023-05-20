@@ -25,6 +25,7 @@
     "@ngrx/component": "^15.4.0",
     "@tauri-apps/api": "^1.2.0",
     "rxjs": "~7.8.0",
+    "tauri-plugin-autostart-api": "https://github.com/tauri-apps/tauri-plugin-autostart",
     "tslib": "^2.3.0",
     "zone.js": "~0.12.0"
   },

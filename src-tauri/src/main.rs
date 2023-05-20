@@ -31,6 +31,7 @@ use tauri::{
     AppHandle, CustomMenuItem, GlobalWindowEvent, Manager, SystemTray, SystemTrayEvent,
     SystemTrayMenu, Wry,
 };
+use tauri_plugin_autostart::MacosLauncher;
 
 pub const CHANNEL_CAPACITY: usize = 64;
 
@@ -73,6 +74,10 @@ fn build_tauri(controller: Controller) -> tauri::Builder<Wry> {
     let tray = SystemTray::new().with_menu(tray_menu);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            None,
+        ))
         .manage(controller)
         .system_tray(tray)
         .invoke_handler(tauri::generate_handler![status])

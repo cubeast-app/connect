@@ -27,6 +27,8 @@ http = "0.2.8"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 btleplug = "0.10.4"
 dyn-clone = "1.0.11"
+tauri-plugin-autostart = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
+
 
 [dev-dependencies]
 lets_expect = "0.5"
