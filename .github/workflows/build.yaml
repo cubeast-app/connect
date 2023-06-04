@@ -79,7 +79,7 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-20.04
-    needs: build
+    needs: [create-release, build]
 
     steps:
       - name: publish release
