@@ -14,6 +14,7 @@
     pkgs.cairo
     pkgs.atk
     pkgs.webkitgtk
+    pkgs.openssl
 
     pkgs.libappindicator
     pkgs.libappindicator-gtk3
