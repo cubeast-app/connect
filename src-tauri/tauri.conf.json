@@ -31,7 +31,12 @@
       "csp": null
     },
     "updater": {
-      "active": false
+      "active": true,
+      "endpoints": [
+        "https://gist.githubusercontent.com/tomekpiotrowski/6e229a4e9a589a9f4410a6ef86fa9f6b/raw/917757ea6d73e25118cd4d6e5c98449ad74306b6/cubeast-connect-updater.json"
+      ],
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM2MkExN0FDMjA3NjJEOEUKUldTT0xYWWdyQmNxeG52elpsY24ycWpVN0RVRHRXYTVFRTVwYm9wSUFEVGxwUmY0OWtrM21sNzIK"
     },
     "systemTray": {
       "iconPath": "icons/icon.png",
