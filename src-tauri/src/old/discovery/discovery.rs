@@ -7,32 +7,33 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::{channel, Sender};
 
 use crate::discovered_device::DiscoveredDevice;
-use crate::events::Events;
 
 const CAPACITY: usize = 1;
 
+pub type DiscoveryListener = Sender<Vec<DiscoveredDevice>>;
+
 pub struct Discovery {
     adapter: Adapter,
-    events: Events,
+    listener: DiscoveryListener,
     stop_rx: Receiver<()>,
 }
 
 impl Discovery {
-    fn new(adapter: Adapter, events: Events, stop_rx: Receiver<()>) -> Self {
+    fn new(adapter: Adapter, listener: DiscoveryListener, stop_rx: Receiver<()>) -> Self {
         Self {
             adapter,
-            events,
+            listener,
             stop_rx,
         }
     }
 
-    pub async fn start(adapter: Adapter, events: Events) -> Sender<()> {
+    pub async fn start(adapter: Adapter, listener: DiscoveryListener) -> Sender<()> {
         let (stop_tx, stop_rx) = channel::<()>(CAPACITY);
 
         info!("Using adapter {:?}", adapter.adapter_info().await.unwrap());
 
         tokio::spawn(async move {
-            let mut discovery = Discovery::new(adapter, events, stop_rx);
+            let mut discovery = Discovery::new(adapter, listener, stop_rx);
             discovery.run().await;
         });
 
@@ -97,7 +98,7 @@ impl Discovery {
 
         discovered_devices.sort_by(|a, b| a.name.cmp(&b.name));
 
-        self.events.on_discovery(discovered_devices).await;
+        self.listener.send(discovered_devices).await;
 
         Ok(())
     }

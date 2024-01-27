@@ -13,9 +13,15 @@
   "tauri": {
     "allowlist": {
       "all": false,
+      "window": {
+        "all":true
+      },
       "shell": {
         "all": false,
         "open": true
+      },
+      "clipboard": {
+        "writeText": true
       }
     },
     "bundle": {
@@ -45,7 +51,7 @@
     "windows": [
       {
         "fullscreen": false,
-        "resizable": false,
+        "resizable": true,
         "title": "Cubeast Connect",
         "width": 600,
         "height": 400

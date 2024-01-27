@@ -1,7 +1,4 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-
-use crate::connected_device::DeviceId;
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "name", rename_all = "kebab-case")]
@@ -9,6 +6,7 @@ pub enum Request {
     Authenticate,
     StartDiscovery,
     StopDiscovery,
+    /*
     Connect {
         id: DeviceId,
     },
@@ -32,5 +30,6 @@ pub enum Request {
         device_id: DeviceId,
         characteristic_id: Uuid,
     },
+    */
     Version,
 }

@@ -1,0 +1,23 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 20px;
+    padding: 0;
+}
+
+.header {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: baseline;
+    column-gap: 20px;
+}
+
+mat-slide-toggle {
+    margin-bottom: 20px;
+}
+
+button {
+    cursor: pointer;
+}

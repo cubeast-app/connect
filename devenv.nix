@@ -15,7 +15,7 @@
     pkgs.atk
     pkgs.webkitgtk
     pkgs.openssl
-
+    pkgs.glib-networking
     pkgs.libappindicator
     pkgs.libappindicator-gtk3
     pkgs.libindicator-gtk3
@@ -25,9 +25,13 @@
 
   ];
 
+  env.GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/";
+
+  enterShell = ''
+  '';
+
   languages.rust = {
     enable = true;
-    version = "stable";
   };
   languages.javascript.enable = true;
   languages.typescript.enable = true;
