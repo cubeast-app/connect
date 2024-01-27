@@ -1,10 +1,9 @@
-use std::{env, sync::Arc};
+use std::env;
 
-use crate::{controller::Controller, server::server_connection::ServerConnection};
 use futures_util::StreamExt;
 use http::{Response as HttpResponse, Uri};
 use log::info;
-use tokio::{net::TcpListener, sync::Mutex};
+use tokio::net::TcpListener;
 use tokio_tungstenite::{
     self,
     tungstenite::handshake::{
@@ -12,6 +11,11 @@ use tokio_tungstenite::{
         server::{ErrorResponse, Response},
     },
 };
+
+use crate::{bluetooth::Bluetooth, server::connection::Connection};
+
+mod connection;
+mod message;
 
 pub const ALLOWED_HOSTS: [&str; 4] = [
     "localhost",
@@ -23,13 +27,13 @@ pub const ALLOWED_HOSTS: [&str; 4] = [
 pub struct Server;
 
 impl Server {
-    pub fn start(controller: Controller) {
+    pub(crate) fn start(bluetooth: Bluetooth) {
         tokio::spawn(async move {
-            Self::run(controller).await;
+            Self::run(bluetooth).await;
         });
     }
 
-    async fn run(controller: Controller) {
+    async fn run(bluetooth: Bluetooth) {
         let listener = create_tcp_listener().await;
 
         info!(
@@ -62,10 +66,8 @@ impl Server {
 
             if let Ok(ws_stream) = ws_stream {
                 let (write, read) = ws_stream.split();
-                let write = Arc::new(Mutex::new(write));
-                let client_id = controller.add_client(write.clone()).await;
-
-                ServerConnection::start(read, write, controller.clone(), client_id);
+                let connection = Connection::start(bluetooth.clone(), write);
+                connection.websocket_message_stream(read);
             }
         }
     }

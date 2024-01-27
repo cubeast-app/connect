@@ -1,19 +1,37 @@
 import { NgModule } from "@angular/core";
-import { BrowserModule } from "@angular/platform-browser";
-import { LetModule, PushModule } from "@ngrx/component";
-import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-
-
-import { AppComponent } from "./app.component";
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatTableModule } from '@angular/material/table';
+import { BrowserModule } from "@angular/platform-browser";
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-import { FontAwesomeModule } from '@fortawesome/angular-fontawesome';
+import { LetDirective, PushPipe } from "@ngrx/component";
+import { AppComponent } from "./app.component";
+import { AppRoutingModule } from "./app.routing.module";
+import { DiscoveryComponent } from './discovery/discovery.component';
+import { MainComponent } from './main/main.component';
+import { MatIconModule } from '@angular/material/icon';
+
 
 @NgModule({
-  declarations: [AppComponent],
-  imports: [BrowserModule, PushModule, LetModule, BrowserAnimationsModule, MatCheckboxModule, MatSlideToggleModule, MatProgressSpinnerModule, FontAwesomeModule],
+  declarations: [
+    AppComponent,
+    DiscoveryComponent,
+    MainComponent
+  ],
+  imports: [
+    AppRoutingModule,
+    BrowserModule,
+    PushPipe,
+    LetDirective,
+    BrowserAnimationsModule,
+    MatSlideToggleModule,
+    MatProgressSpinnerModule,
+    MatButtonModule,
+    MatTableModule,
+    MatIconModule
+  ],
   providers: [],
   bootstrap: [AppComponent],
 })
-export class AppModule {}
+export class AppModule { }

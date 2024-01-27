@@ -1,0 +1,17 @@
+<div class="container">
+  <h1>Cubeast Connect</h1>
+  <h4>{{ appVersion }}</h4>
+  <div class="row">
+    <a href="https://cubeast.com" target="_blank">
+      <img src="/assets/logo.png" class="logo" alt="Cubeast logo" />
+    </a>
+  </div>
+  <div class="row">
+  </div>
+  <div class="row">
+    <button mat-flat-button (click)="discover()">Discover Bluetooth devices</button>
+  </div>
+  <div class="row">
+    <mat-slide-toggle (change)="updateStartOnBoot($event.checked)">Launch on system startup</mat-slide-toggle>
+  </div>
+</div>

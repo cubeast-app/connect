@@ -5,41 +5,40 @@ use futures_util::{
     stream::{AbortHandle, Abortable},
     Stream, StreamExt,
 };
+use tauri::async_runtime::Sender;
 
-use crate::{connected_device::DeviceId, events::Events};
+use crate::connected_device::DeviceId;
 
-pub type CharacteristicValue = Vec<u8>;
+pub type NotificationListener = Sender<ValueNotification>;
 
+/// Listens to notifications from all characteristics of a single Bluetooth device
 pub struct Notifications {
-    device_id: DeviceId,
     notification_stream: Pin<Box<dyn Stream<Item = ValueNotification> + Send>>,
-    events: Events,
+    listener: NotificationListener,
 }
 
 impl Notifications {
     fn new(
-        device_id: DeviceId,
         notification_stream: Pin<Box<dyn Stream<Item = ValueNotification> + Send>>,
-        events: Events,
+        listener: NotificationListener,
     ) -> Self {
         Self {
-            device_id,
             notification_stream,
-            events,
+            listener,
         }
     }
 
     pub fn start(
         device_id: DeviceId,
         notification_stream: Pin<Box<dyn Stream<Item = ValueNotification> + Send>>,
-        events: Events,
+        listener: NotificationListener,
     ) -> AbortHandle {
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
 
         tokio::spawn(async move {
             Abortable::new(
                 async move {
-                    let mut notifications = Self::new(device_id, notification_stream, events);
+                    let mut notifications = Self::new(notification_stream, listener);
                     notifications.run().await;
                 },
                 abort_registration,
@@ -52,14 +51,7 @@ impl Notifications {
 
     pub async fn run(&mut self) {
         while let Some(notification) = &self.notification_stream.next().await {
-            self.events
-                .on_notification(
-                    self.device_id.clone(),
-                    notification.uuid,
-                    notification.value.clone(),
-                )
-                .await
-                .expect("Failed to send notification");
+            self.listener.send(notification.clone()).await;
         }
     }
 }

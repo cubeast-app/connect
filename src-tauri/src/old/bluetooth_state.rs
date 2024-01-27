@@ -4,17 +4,16 @@ use btleplug::{api::Characteristic, Error};
 use tokio::sync::mpsc::error::SendError;
 use uuid::Uuid;
 
-use crate::connected_device::{ClientId, ConnectedDevice, DeviceId};
+use crate::client::Client;
+use crate::connected_device::{ConnectedDevice, DeviceId, WebsocketClientId};
 use crate::events::Events;
-use crate::{
-    app_state::AppState, bluetooth::Bluetooth, clients::Client, discovered_device::DiscoveredDevice,
-};
+use crate::{app_state::AppState, bluetooth::Bluetooth, discovered_device::DiscoveredDevice};
 
 /// Maintains a combined state of the bluetooth adapter and the application data relevant to Bluetooth.
 ///
 /// Those two states need to be kept in sync.
 pub struct BluetoothState {
-    state: AppState<Client>,
+    state: AppState<Box<dyn Client>>,
     bluetooth: Bluetooth,
 }
 
@@ -32,16 +31,12 @@ impl BluetoothState {
         Ok(())
     }
 
-    pub fn set_events(&mut self, events: Events) {
-        self.bluetooth.set_events(events);
-    }
-
-    pub fn client_connected(&mut self, client: Client) -> Uuid {
+    pub fn client_connected(&mut self, client: Box<dyn Client>) -> Uuid {
         self.state.add_client(client)
     }
 
-    pub async fn client_disconnected(&mut self, client_id: &Uuid) -> Result<(), Error> {
-        self.state.remove_client(client_id);
+    pub async fn client_disconnected(&mut self, client: &Uuid) -> Result<(), Error> {
+        self.state.remove_client(client);
 
         // stop discovery if needed
         if !self.state.has_discovery_clients() {
@@ -65,23 +60,20 @@ impl BluetoothState {
         self.state.client_count()
     }
 
-    pub fn client(&self, client_id: &Uuid) -> Option<Client> {
+    pub fn client(&self, client_id: &Uuid) -> Option<&Box<dyn Client>> {
         self.state.client(client_id)
     }
 
-    pub async fn client_started_discovery(&mut self, client_id: Uuid) -> Result<(), Error> {
-        self.state.add_discovery_client(client_id);
+    pub async fn client_started_discovery(&mut self, client: &Uuid) -> Result<(), Error> {
+        self.state.add_discovery_client(client);
 
         self.bluetooth.start_discovery().await?;
 
         Ok(())
     }
 
-    pub async fn client_stopped_discovery(
-        &mut self,
-        client_id: &Uuid,
-    ) -> Result<(), SendError<()>> {
-        self.state.remove_discovery_client(client_id);
+    pub async fn client_stopped_discovery(&mut self, client: &Uuid) -> Result<(), SendError<()>> {
+        self.state.remove_discovery_client(client);
 
         if !self.state.has_discovery_clients() {
             self.bluetooth.stop_discovery().await?;
@@ -90,7 +82,7 @@ impl BluetoothState {
         Ok(())
     }
 
-    pub async fn discovery_clients(&self) -> Vec<Client> {
+    pub async fn discovery_clients(&self) -> Vec<&Box<dyn Client>> {
         self.state.discovery_clients()
     }
 
@@ -236,7 +228,7 @@ impl BluetoothState {
 
     pub async fn subscribe_characteristic(
         &mut self,
-        client_id: ClientId,
+        client_id: WebsocketClientId,
         device_id: DeviceId,
         characteristic_id: Uuid,
     ) -> Result<(), Error> {
@@ -270,7 +262,7 @@ impl BluetoothState {
         &mut self,
         device_id: String,
         characteristic_id: Uuid,
-        client_id: &ClientId,
+        client_id: &WebsocketClientId,
     ) -> Result<(), Error> {
         let connected_device = self
             .state

@@ -3,7 +3,7 @@ use std::fmt::{self, Display, Formatter};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{connected_device::DeviceId, discovered_device::DiscoveredDevice};
+use crate::{bluetooth::discovery::discovered_device::DiscoveredDevice, device_id::DeviceId};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "name", rename_all = "kebab-case")]
@@ -25,10 +25,10 @@ pub enum Broadcast {
 impl Display for Broadcast {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Broadcast::DiscoveredDevices { .. } => write!(f, "DiscoveredDevices"),
-            Broadcast::DiscoveryStopped => write!(f, "DiscoveryStopped"),
-            Broadcast::CharacteristicValue { .. } => write!(f, "CharacteristicValue"),
-            Broadcast::Disconnected { .. } => write!(f, "Disconnected"),
+            Self::DiscoveredDevices { .. } => write!(f, "DiscoveredDevices"),
+            Self::DiscoveryStopped => write!(f, "DiscoveryStopped"),
+            Self::CharacteristicValue { .. } => write!(f, "CharacteristicValue"),
+            Self::Disconnected { .. } => write!(f, "Disconnected"),
         }
     }
 }

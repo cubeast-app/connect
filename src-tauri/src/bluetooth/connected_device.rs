@@ -5,15 +5,14 @@ use uuid::Uuid;
 
 use crate::discovered_device::DiscoveredDevice;
 
-pub type ClientId = Uuid;
-pub type DeviceId = String;
+pub type WebsocketClientId = Uuid;
 
 pub struct ConnectedDevice {
-    clients: HashSet<ClientId>,
+    clients: HashSet<WebsocketClientId>,
     pub peripheral: PlatformPeripheral,
     pub device: DiscoveredDevice,
     pub services: Vec<Uuid>,
-    subscriptions: HashMap<Uuid, HashSet<ClientId>>,
+    subscriptions: HashMap<Uuid, HashSet<WebsocketClientId>>,
 }
 
 impl ConnectedDevice {
@@ -47,7 +46,7 @@ impl ConnectedDevice {
         self.clients.is_empty()
     }
 
-    pub fn client_ids(&self) -> Vec<ClientId> {
+    pub fn client_ids(&self) -> Vec<WebsocketClientId> {
         self.clients.iter().cloned().collect()
     }
 
@@ -58,7 +57,10 @@ impl ConnectedDevice {
             .insert(client_id)
     }
 
-    pub fn subscriptions(&mut self, characteristic_id: &Uuid) -> Option<&mut HashSet<ClientId>> {
+    pub fn subscriptions(
+        &mut self,
+        characteristic_id: &Uuid,
+    ) -> Option<&mut HashSet<WebsocketClientId>> {
         self.subscriptions.get_mut(characteristic_id)
     }
 

@@ -1,19 +1,28 @@
-use std::{sync::Arc, time::Duration};
+use std::{pin::Pin, sync::Arc, time::Duration};
 
 use btleplug::Error;
-use tauri::async_runtime::Mutex;
-use tokio::time;
+use futures_util::Future;
+use tauri::async_runtime::{Mutex, Sender};
+use tokio::{sync::mpsc::error::SendError, time};
 use uuid::Uuid;
 
 use crate::{
     bluetooth_state::BluetoothState,
-    clients::Client,
-    connected_device::{ClientId, DeviceId},
+    broadcaster::broadcast_command::BroadcastCommand,
+    client::Client,
+    connected_device::{DeviceId, WebsocketClientId},
     discovered_device::DiscoveredDevice,
 };
 
 const STOP_DISCOVERY_TIMEOUT: u64 = 60000;
 
+/*
+#[derive(Clone, Debug)]
+pub enum Client {
+    WebSocketClient(WebSocketClient),
+    UI,
+}
+*/
 #[derive(Clone)]
 pub struct Controller {
     bluetooth_state: Arc<Mutex<BluetoothState>>,
@@ -24,7 +33,7 @@ impl Controller {
         Self { bluetooth_state }
     }
 
-    pub async fn add_client(&self, client: Client) -> Uuid {
+    pub async fn add_client(&self, client: Sender<>) -> Uuid {
         let mut bluetooth_state = self.bluetooth_state.lock().await;
         bluetooth_state.client_connected(client)
     }
@@ -43,7 +52,7 @@ impl Controller {
 
     pub async fn add_discovery_client(&self, client_id: Uuid) -> Result<(), Error> {
         let mut bluetooth_state = self.bluetooth_state.lock().await;
-        bluetooth_state.client_started_discovery(client_id).await?;
+        bluetooth_state.client_started_discovery(&client_id).await?;
 
         let controller = self.clone();
         tokio::spawn(async move {
@@ -58,10 +67,10 @@ impl Controller {
         Ok(())
     }
 
-    pub async fn remove_discovery_client(&self, client_id: &Uuid) -> Result<(), Error> {
+    pub async fn remove_discovery_client(&self, client: &Uuid) -> Result<(), Error> {
         let mut bluetooth_state = self.bluetooth_state.lock().await;
         bluetooth_state
-            .client_stopped_discovery(client_id)
+            .client_stopped_discovery(client)
             .await
             .map_err(|error| Error::Other(Box::new(error)))?;
 
@@ -122,7 +131,7 @@ impl Controller {
 
     pub async fn subscribe_characteristic(
         &self,
-        client_id: ClientId,
+        client_id: WebsocketClientId,
         device_id: DeviceId,
         characteristic_id: Uuid,
     ) -> Result<(), Error> {
@@ -136,7 +145,7 @@ impl Controller {
         &self,
         device_id: String,
         characteristic_id: Uuid,
-        client_id: &ClientId,
+        client_id: &WebsocketClientId,
     ) -> Result<(), Error> {
         let mut bluetooth_state = self.bluetooth_state.lock().await;
         bluetooth_state

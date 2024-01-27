@@ -5,15 +5,15 @@ use tokio::{net::TcpStream, sync::Mutex};
 use tokio_tungstenite::{self, tungstenite::Message as TungsteniteMessage, WebSocketStream};
 use uuid::Uuid;
 
-use crate::connected_device::ClientId;
+use crate::connected_device::WebsocketClientId;
 
-pub type Client = Arc<Mutex<SplitSink<WebSocketStream<TcpStream>, TungsteniteMessage>>>;
+pub type WebSocket = Arc<Mutex<SplitSink<WebSocketStream<TcpStream>, TungsteniteMessage>>>;
 
-pub struct Clients<ClientType: Clone> {
-    internal: HashMap<ClientId, ClientType>,
+pub struct Clients<ClientType> {
+    internal: HashMap<WebsocketClientId, ClientType>,
 }
 
-impl<ClientType: Clone> Clients<ClientType> {
+impl<ClientType> Clients<ClientType> {
     pub fn new() -> Self {
         Self {
             internal: HashMap::new(),
@@ -27,7 +27,7 @@ impl<ClientType: Clone> Clients<ClientType> {
         client_id
     }
 
-    pub fn remove(&mut self, client_id: &ClientId) {
+    pub fn remove(&mut self, client_id: &WebsocketClientId) {
         self.internal.remove(client_id);
     }
 
@@ -35,11 +35,15 @@ impl<ClientType: Clone> Clients<ClientType> {
         self.internal.len()
     }
 
-    pub fn client_ids(&self) -> Vec<ClientId> {
+    pub fn client_ids(&self) -> Vec<WebsocketClientId> {
         self.internal.keys().cloned().collect()
     }
 
-    pub fn get_by_id(&self, id: &ClientId) -> Option<ClientType> {
-        self.internal.get(id).cloned()
+    pub fn get_by_id(&self, id: &WebsocketClientId) -> Option<&ClientType> {
+        self.internal.get(id)
+    }
+
+    pub fn get_mut_by_id(&mut self, id: &WebsocketClientId) -> Option<&mut ClientType> {
+        self.internal.get_mut(id)
     }
 }

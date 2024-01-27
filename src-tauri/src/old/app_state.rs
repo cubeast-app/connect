@@ -4,16 +4,16 @@ use uuid::Uuid;
 
 use crate::{
     clients::Clients,
-    connected_device::{ClientId, ConnectedDevice, DeviceId},
+    connected_device::{ConnectedDevice, DeviceId, WebsocketClientId},
 };
 
-pub struct AppState<ClientType: Clone> {
+pub struct AppState<ClientType> {
     clients: Clients<ClientType>,
-    discovery_clients: HashSet<ClientId>,
+    discovery_clients: HashSet<Uuid>,
     connected_devices: HashMap<DeviceId, ConnectedDevice>,
 }
 
-impl<ClientType: Clone> AppState<ClientType> {
+impl<ClientType> AppState<ClientType> {
     pub fn new() -> Self {
         Self {
             clients: Clients::new(),
@@ -43,20 +43,20 @@ impl<ClientType: Clone> AppState<ClientType> {
         self.clients.len()
     }
 
-    pub fn client_ids(&self) -> Vec<ClientId> {
+    pub fn client_ids(&self) -> Vec<WebsocketClientId> {
         self.clients.client_ids()
     }
 
-    pub fn client(&self, client_id: &Uuid) -> Option<ClientType> {
+    pub fn client(&self, client_id: &Uuid) -> Option<&ClientType> {
         self.clients.get_by_id(client_id)
     }
 
-    pub fn add_discovery_client(&mut self, client_id: Uuid) {
-        self.discovery_clients.insert(client_id);
+    pub fn add_discovery_client(&mut self, client_id: &Uuid) {
+        self.discovery_clients.insert(client_id.clone());
     }
 
-    pub fn remove_discovery_client(&mut self, client_id: &Uuid) {
-        self.discovery_clients.remove(client_id);
+    pub fn remove_discovery_client(&mut self, client: &Uuid) {
+        self.discovery_clients.remove(client);
     }
 
     pub fn has_discovery_clients(&self) -> bool {
@@ -68,11 +68,9 @@ impl<ClientType: Clone> AppState<ClientType> {
         self.discovery_clients.iter().cloned().collect()
     }
 
-    pub fn discovery_clients(&self) -> Vec<ClientType> {
-        self.discovery_clients
-            .iter()
-            .filter_map(|id| self.client(id))
-            .collect()
+    pub fn discovery_clients(&self) -> Vec<&ClientType> {
+        let discovery_clients = self.discovery_clients.iter().to_owned();
+        discovery_clients.filter_map(|id| self.client(id)).collect()
     }
 
     pub fn connected_device(&mut self, device_id: &DeviceId) -> Option<&mut ConnectedDevice> {
@@ -122,7 +120,7 @@ mod tests {
             let mut s = AppState::new();
             let alice_id = s.add_client(alice.clone());
             s.add_client(bob);
-            s.add_discovery_client(alice_id);
+            s.add_discovery_client(&alice_id);
             s
         };
         let alice = "alice".to_string();
@@ -153,7 +151,7 @@ mod tests {
             }
         }
 
-        expect(state.add_discovery_client(client_id)) as add_discovery_client {
+        expect(state.add_discovery_client(&client_id)) as add_discovery_client {
             when(mut state = state_with_one_client) {
                 let client_id = *state.client_ids().first().unwrap();
                 to make(state.has_discovery_clients()) be_true
