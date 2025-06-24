@@ -1,14 +1,17 @@
-use log::{error, info};
+use std::thread;
+
+use futures_util::StreamExt;
+use log::{error, trace};
 use tauri::{
-    AppHandle, CustomMenuItem, GlobalWindowEvent, Manager as _, State, SystemTray, SystemTrayEvent,
-    SystemTrayMenu, Wry,
+    async_runtime::block_on, AppHandle, CustomMenuItem, GlobalWindowEvent, Manager as _, State,
+    SystemTray, SystemTrayEvent, SystemTrayMenu, Wry,
 };
 use tauri_plugin_autostart::MacosLauncher;
 
-use crate::main_controller::MainController;
+use crate::bluetooth::Bluetooth;
 
 struct Context {
-    main_controller: MainController,
+    bluetooth: Bluetooth,
 }
 
 #[tauri::command]
@@ -16,25 +19,36 @@ async fn start_discovery(
     app_handle: tauri::AppHandle,
     context: State<'_, Context>,
 ) -> Result<(), String> {
-    info!("Starting discovery from UI");
-    context
-        .main_controller
-        .start_discovery(app_handle)
+    trace!("Starting discovery from UI");
+    let discovered_devices = context
+        .bluetooth
+        .subscribe_to_discovery()
         .await
-        .map_err(|_| "Failed to start discovery".to_string())
+        .map_err(|err| err.to_string())
+        .expect("Failed to start discovery");
+
+    thread::spawn(move || {
+        let mut devices_stream = discovered_devices.fuse();
+        let app_handle = app_handle.clone();
+
+        while let Some(devices) = block_on(devices_stream.next()) {
+            trace!("Discovered devices: {:?}", devices);
+            app_handle.emit_all("discovery", devices).unwrap();
+        }
+    });
+
+    Ok(())
 }
 
 #[tauri::command]
 async fn stop_discovery(context: State<'_, Context>) -> Result<(), String> {
-    info!("Stopping discovery from UI");
-    context
-        .main_controller
-        .stop_discovery()
-        .await
-        .map_err(|_| "Failed to start discovery".to_string())
+    trace!("Stopping discovery from UI");
+    context.bluetooth.unsubscribe_from_discovery().await;
+
+    Ok(())
 }
 
-pub fn build_tauri(main_controller: MainController) -> tauri::Builder<Wry> {
+pub fn build_tauri(bluetooth: Bluetooth) -> tauri::Builder<Wry> {
     let tray_menu = SystemTrayMenu::new()
         .add_item(CustomMenuItem::new("open", "Open"))
         .add_item(CustomMenuItem::new("exit", "Exit"));
@@ -46,7 +60,7 @@ pub fn build_tauri(main_controller: MainController) -> tauri::Builder<Wry> {
             MacosLauncher::LaunchAgent,
             None,
         ))
-        .manage(Context { main_controller })
+        .manage(Context { bluetooth })
         .system_tray(tray)
         .invoke_handler(tauri::generate_handler![start_discovery, stop_discovery])
         .on_system_tray_event(handle_system_tray_event)

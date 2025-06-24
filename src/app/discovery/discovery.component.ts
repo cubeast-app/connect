@@ -8,8 +8,13 @@ import { writeText } from '@tauri-apps/api/clipboard';
 type DiscoveredDevicesFilter = (devices: DiscoveredDevice[]) => DiscoveredDevice[];
 
 const NoFilter: DiscoveredDevicesFilter = devices => devices;
-const CubingPrefixes = ['GAN', 'MG', 'AiCube', 'Gi', 'Mi Smart Magic Cube', 'GoCube', 'Rubiks', 'MHC'];
+const CubingPrefixes = ['GAN', 'MG', 'AiCube', 'Gi', 'Mi Smart Magic Cube', 'GoCube', 'Rubiks', 'MHC', 'WCU'];
 const DefaultName = 'Unnamed Device';
+const CubingDeviceFilter: DiscoveredDevicesFilter = devices => devices.filter(isCubingDevice);
+
+function isCubingDevice(device: DiscoveredDevice): boolean {
+  return CubingPrefixes.some(prefix => device.name?.startsWith(prefix));
+}
 
 @Component({
   selector: 'app-discovery',
@@ -20,8 +25,8 @@ const DefaultName = 'Unnamed Device';
 export class DiscoveryComponent {
   discoveredDevices = new BehaviorSubject<DiscoveredDevice[]>([]);
   shownDevices!: Observable<DiscoveredDevice[]>;
-  columnsToDisplay = ['name', 'address', 'gan_encryption_key'];
-  discoveredDevicesFilter = new BehaviorSubject<DiscoveredDevicesFilter>(NoFilter);
+  columnsToDisplay = ['name', 'address', 'encryption_key'];
+  discoveredDevicesFilter = new BehaviorSubject<DiscoveredDevicesFilter>(CubingDeviceFilter);
 
   constructor(private zone: NgZone) { }
 
@@ -60,14 +65,19 @@ export class DiscoveryComponent {
 
   showOnlyCubingDevices(showOnlyCubingDevices: boolean): void {
     if (showOnlyCubingDevices) {
-      this.discoveredDevicesFilter.next(devices => devices.filter(this.isCubingDevice));
+      this.discoveredDevicesFilter.next(CubingDeviceFilter);
     } else {
       this.discoveredDevicesFilter.next(NoFilter);
     }
   }
 
-  ganEncryptionKey(manufacturerData: ManufacturerData): string | undefined {
-    const manufacturerDataPart = manufacturerData[1];
+  encryptionKey(device: DiscoveredDevice): string | undefined {
+    if (!isCubingDevice(device) || device.manufacturer_data === undefined) {
+      return undefined;
+    }
+
+    const indexes = Object.keys(device.manufacturer_data).map(Number);
+    const manufacturerDataPart = device.manufacturer_data[indexes[0]];
 
     if (manufacturerDataPart === undefined) {
       return undefined;
@@ -78,16 +88,11 @@ export class DiscoveryComponent {
   }
 
   async copyToClipboard(text: string): Promise<void> {
-    console.log(text);
     await writeText(text);
   }
 
   trackBy(index: number, device: DiscoveredDevice): string {
     return device.address ?? device.name ?? index.toString();
-  }
-
-  private isCubingDevice(device: DiscoveredDevice): boolean {
-    return CubingPrefixes.some(prefix => device.name?.startsWith(prefix));
   }
 }
 

@@ -1,17 +1,20 @@
-use futures_util::stream::SplitSink;
-use futures_util::{select, FutureExt, SinkExt, StreamExt};
-use log::{error, warn};
-use tokio::net::TcpStream;
-use tokio::sync::mpsc::Receiver;
-use tokio::sync::mpsc::Sender;
+use futures_util::SinkExt;
+use futures_util::{
+    stream::{SplitSink, SplitStream},
+    StreamExt,
+};
+use log::{error, info, warn};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::oneshot;
+use tokio::{net::TcpStream, select, sync::mpsc::UnboundedSender};
 use tokio_tungstenite::tungstenite::Error as TungsteniteError;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::{self, tungstenite::Message as TungsteniteMessage};
 
-use crate::bluetooth::discovery::discovered_device::DiscoveredDevice;
-use crate::bluetooth::discovery::discovery_stream::DiscoveryStream;
-use crate::bluetooth::Bluetooth;
+use crate::bluetooth::{
+    discovery::{discovered_device::DiscoveredDevice, discovery_stream::DiscoveryStream},
+    Bluetooth,
+};
 use crate::server::message::broadcast::Broadcast;
 use crate::server::message::request::Request;
 use crate::server::message::response::Response;
@@ -19,14 +22,16 @@ use crate::version::VERSION;
 
 #[derive(Debug)]
 pub(super) enum ConnectionMessage {
-    WebsocketMessage(Result<TungsteniteMessage, TungsteniteError>),
-    Discovery(Vec<DiscoveredDevice>),
+    /// Message received from the websocket client associated with this connection
+    WebsocketMessageReceived(Result<TungsteniteMessage, TungsteniteError>),
+    /// An update from Bluetooth discovery
+    DevicesDiscovered(Vec<DiscoveredDevice>),
     Stop,
 }
 
 pub(super) struct ConnectionActor {
     bluetooth: Bluetooth,
-    sender: Sender<ConnectionMessage>,
+    self_tx: UnboundedSender<ConnectionMessage>,
     websocket_write: SplitSink<WebSocketStream<TcpStream>, TungsteniteMessage>,
     discovery_abort: Option<oneshot::Sender<()>>,
 }
@@ -34,24 +39,26 @@ pub(super) struct ConnectionActor {
 impl ConnectionActor {
     pub fn new(
         bluetooth: Bluetooth,
-        sender: Sender<ConnectionMessage>,
+        self_tx: UnboundedSender<ConnectionMessage>,
         write: SplitSink<WebSocketStream<TcpStream>, TungsteniteMessage>,
     ) -> Self {
         Self {
             bluetooth,
-            sender,
+            self_tx,
             websocket_write: write,
             discovery_abort: None,
         }
     }
 
-    pub(super) async fn run(&mut self, mut rx: Receiver<ConnectionMessage>) {
+    pub(super) async fn run(&mut self, mut rx: UnboundedReceiver<ConnectionMessage>) {
         while let Some(message) = rx.recv().await {
             match message {
-                ConnectionMessage::WebsocketMessage(message) => {
+                ConnectionMessage::WebsocketMessageReceived(message) => {
                     self.websocket_message(message).await
                 }
-                ConnectionMessage::Discovery(devices) => self.discovery(devices).await,
+                ConnectionMessage::DevicesDiscovered(devices) => {
+                    self.devices_discovered(devices).await
+                }
                 ConnectionMessage::Stop => todo!(),
             }
         }
@@ -59,7 +66,7 @@ impl ConnectionActor {
 
     async fn websocket_message(&mut self, message: Result<TungsteniteMessage, TungsteniteError>) {
         let response = if let Ok(TungsteniteMessage::Text(text)) = &message {
-            let request: Result<Request, _> = serde_json::from_str(&text);
+            let request: Result<Request, _> = serde_json::from_str(text);
 
             if let Ok(request) = request {
                 Some(self.handle_request(request).await)
@@ -88,58 +95,42 @@ impl ConnectionActor {
         }
     }
 
+    async fn devices_discovered(&mut self, devices: Vec<DiscoveredDevice>) {
+        let broadcast = Broadcast::DiscoveredDevices { devices };
+
+        let serialized = serde_json::to_string(&broadcast).unwrap();
+        let broadcast = TungsteniteMessage::Text(serialized);
+
+        let result = self.websocket_write.send(broadcast).await;
+
+        if let Err(err) = result {
+            warn!("Failed to send message to client: {:?}", err);
+        }
+    }
+
     async fn handle_request(&mut self, request: Request) -> Response {
         match request {
-            Request::StartDiscovery => {
-                let result = self.bluetooth.discovery.subscribe().await;
-
-                if let Ok(response_receiver) = result {
-                    let response = response_receiver.await;
-                    match response {
-                        Ok(stream) => {
-                            let abort = self.discovery_stream(stream).await;
-                            self.discovery_abort = Some(abort);
-                            Response::Ok
-                        }
-                        Err(_) => Response::error("Failed to start discovery"),
-                    }
-                } else {
-                    Response::error("Failed to start discovery")
-                }
-            }
-            Request::Authenticate => todo!(),
+            Request::StartDiscovery => self.handle_start_discovery().await,
             Request::StopDiscovery => {
                 if let Some(discovery_abort) = self.discovery_abort.take() {
-                    let result = self.bluetooth.discovery.unsubscribe().await;
-
-                    if result.is_err() {
-                        error!("Failed to stop discovery");
-                    }
-
                     let result = discovery_abort.send(());
 
                     if let Err(err) = result {
                         error!("Failed to abort discovery: {:?}", err);
                     }
 
-                    self.discovery_abort = None;
-
                     Response::Ok
                 } else {
                     Response::error("Discovery is not running")
                 }
             }
-            /*
             Request::Connect { id: name } => {
-                let result = self
-                    .controller
-                    .connect_client_to_device(name, self.client_id)
-                    .await;
+                let result = self.bluetooth.connect(name).await;
 
                 if let Ok(discovered_device) = result {
                     Response::Connected {
-                        device: discovered_device.0,
-                        services: discovered_device.1,
+                        device: discovered_device.device,
+                        services: discovered_device.services,
                     }
                 } else {
                     Response::Error {
@@ -148,10 +139,7 @@ impl ConnectionActor {
                 }
             }
             Request::Disconnect { id: name } => {
-                let result = self
-                    .controller
-                    .disconnect_client_from_device(name, self.client_id)
-                    .await;
+                let result = self.bluetooth.disconnect(name).await;
 
                 if result.is_ok() {
                     Response::Ok
@@ -161,6 +149,7 @@ impl ConnectionActor {
                     }
                 }
             }
+            /*
             Request::ReadCharacteristic {
                 device_id,
                 characteristic_id,
@@ -235,44 +224,69 @@ impl ConnectionActor {
         }
     }
 
-    async fn discovery(&mut self, devices: Vec<DiscoveredDevice>) {
-        let broadcast = Broadcast::DiscoveredDevices { devices };
+    pub(super) fn handle_websocket(&self, mut read: SplitStream<WebSocketStream<TcpStream>>) {
+        let tx = self.self_tx.clone();
 
-        let serialized = serde_json::to_string(&broadcast).unwrap();
-        let broadcast = TungsteniteMessage::Text(serialized);
+        tokio::spawn(async move {
+            while let Some(message) = read.next().await {
+                if let Err(err) = tx.send(ConnectionMessage::WebsocketMessageReceived(message)) {
+                    error!("Failed to send websocket message: {:?}", err);
+                }
+            }
 
-        let result = self.websocket_write.send(broadcast).await;
+            info!("Websocket message stream ended");
+        });
+    }
 
-        if let Err(err) = result {
-            warn!("Failed to send message to client: {:?}", err);
+    async fn handle_start_discovery(&mut self) -> Response {
+        let result = self.bluetooth.subscribe_to_discovery().await;
+
+        match result {
+            Ok(discovery_stream) => {
+                let (abort_sender, abort_receiver) = oneshot::channel();
+
+                self.devices_discovered_stream(discovery_stream, abort_receiver);
+
+                self.discovery_abort = Some(abort_sender);
+
+                Response::Ok
+            }
+            Err(err) => {
+                error!("Failed to start discovery: {:?}", err);
+                Response::Error {
+                    error: String::from("Failed to start discovery"),
+                }
+            }
         }
     }
 
-    async fn discovery_stream(&self, mut stream: DiscoveryStream) -> oneshot::Sender<()> {
-        let (tx, rx) = oneshot::channel::<()>();
-        let sender = self.sender.clone();
-        let mut rx = rx.fuse();
+    pub(crate) fn devices_discovered_stream(
+        &self,
+        mut discovery_stream: DiscoveryStream,
+        abort: oneshot::Receiver<()>,
+    ) {
+        let tx = self.self_tx.clone();
 
         tokio::spawn(async move {
+            use futures_util::FutureExt;
+            let mut abort = Box::pin(abort).fuse();
+
             loop {
                 select! {
-                    _ = &mut rx => break,
-                    devices = stream.next().fuse() => {
-                        match devices {
-                            Some(devices) => {
-                                let result = sender.send(ConnectionMessage::Discovery(devices));
-
-                                if let Err(error) = result.await {
-                                    error!("Failed to send discovery message: {:?}", error);
+                        _ = (&mut abort) => {
+                            break;
+                        },
+                        devices = discovery_stream.next() => {
+                            if let Some(devices) = devices {
+                                if let Err(err) = tx.send(ConnectionMessage::DevicesDiscovered(devices)) {
+                                    error!("Failed to send discovered devices: {:?}", err);
                                 }
-                            },
-                            None => break,
-                        }
-                    }
+                            } else {
+                                break;
+                            }
+                        },
                 }
             }
         });
-
-        tx
     }
 }

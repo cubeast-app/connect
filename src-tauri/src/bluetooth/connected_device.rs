@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use btleplug::platform::Peripheral as PlatformPeripheral;
 use uuid::Uuid;
 
-use crate::discovered_device::DiscoveredDevice;
+use super::discovery::discovered_device::DiscoveredDevice;
 
 pub type WebsocketClientId = Uuid;
 

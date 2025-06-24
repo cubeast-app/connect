@@ -15,7 +15,6 @@
 )]
 
 mod bluetooth;
-mod device_id;
 mod main_controller;
 mod server;
 mod ui;
@@ -23,19 +22,19 @@ mod version;
 
 use bluetooth::Bluetooth;
 use server::Server;
-use ui::build_tauri;
 
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
 
-    let bluetooth = Bluetooth::new().await;
+    let adapter = bluetooth::adapter()
+        .await
+        .expect("Failed to connect to the Bluetooth adapter");
+    let bluetooth = Bluetooth::start(adapter);
 
     Server::start(bluetooth.clone());
 
-    let main_controller = main_controller::MainController::start(bluetooth);
-
-    build_tauri(main_controller)
+    ui::build_tauri(bluetooth)
         .run(tauri::generate_context!())
         .expect("error while running Cubeast Connect");
 }
