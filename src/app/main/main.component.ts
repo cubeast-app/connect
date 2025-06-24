@@ -9,9 +9,10 @@ import { Observable, interval, mergeMap, from } from 'rxjs';
 import { isEnabled, enable, disable } from 'tauri-plugin-autostart-api';
 
 @Component({
-  selector: 'app-main',
-  templateUrl: './main.component.html',
-  styleUrls: ['./main.component.css']
+    selector: 'app-main',
+    templateUrl: './main.component.html',
+    styleUrls: ['./main.component.css'],
+    standalone: false
 })
 export class MainComponent {
   @ViewChild(MatSlideToggle)

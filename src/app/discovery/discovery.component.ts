@@ -17,10 +17,11 @@ function isCubingDevice(device: DiscoveredDevice): boolean {
 }
 
 @Component({
-  selector: 'app-discovery',
-  templateUrl: './discovery.component.html',
-  styleUrls: ['./discovery.component.css'],
-  changeDetection: ChangeDetectionStrategy.OnPush,
+    selector: 'app-discovery',
+    templateUrl: './discovery.component.html',
+    styleUrls: ['./discovery.component.css'],
+    changeDetection: ChangeDetectionStrategy.OnPush,
+    standalone: false
 })
 export class DiscoveryComponent {
   discoveredDevices = new BehaviorSubject<DiscoveredDevice[]>([]);
