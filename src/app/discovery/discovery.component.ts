@@ -1,9 +1,14 @@
-import { ChangeDetectionStrategy, Component, NgZone } from '@angular/core';
-import { DiscoveredDevice, ManufacturerData } from './discovered_device';
-import { BehaviorSubject, Observable, Subject, combineLatest, distinctUntilChanged, interval, map, sample } from 'rxjs';
-import { listen } from '@tauri-apps/api/event'
+import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { MatIcon } from '@angular/material/icon';
+import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatSlideToggle } from '@angular/material/slide-toggle';
+import { MatTableModule } from '@angular/material/table';
+import { PushPipe } from '@ngrx/component';
 import { writeText } from '@tauri-apps/api/clipboard';
-
+import { listen } from '@tauri-apps/api/event';
+import { BehaviorSubject, combineLatest, distinctUntilChanged, interval, map, Observable, sample } from 'rxjs';
+import { DiscoveredDevice } from './discovered_device';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 type DiscoveredDevicesFilter = (devices: DiscoveredDevice[]) => DiscoveredDevice[];
 
@@ -17,25 +22,24 @@ function isCubingDevice(device: DiscoveredDevice): boolean {
 }
 
 @Component({
-    selector: 'app-discovery',
-    templateUrl: './discovery.component.html',
-    styleUrls: ['./discovery.component.css'],
-    changeDetection: ChangeDetectionStrategy.OnPush,
-    standalone: false
+  selector: 'app-discovery',
+  templateUrl: './discovery.component.html',
+  styleUrls: ['./discovery.component.css'],
+  imports: [MatTableModule, MatSlideToggle, MatProgressSpinner, MatIcon, PushPipe, MatSnackBarModule ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: true
 })
 export class DiscoveryComponent {
   discoveredDevices = new BehaviorSubject<DiscoveredDevice[]>([]);
   shownDevices!: Observable<DiscoveredDevice[]>;
-  columnsToDisplay = ['name', 'address', 'encryption_key'];
-  discoveredDevicesFilter = new BehaviorSubject<DiscoveredDevicesFilter>(CubingDeviceFilter);
+  displayedColumns = ['name', 'address', 'encryption_key'];
+  discoveredDevicesFilter = new BehaviorSubject(CubingDeviceFilter);
 
-  constructor(private zone: NgZone) { }
+  constructor(private snackBar: MatSnackBar) { }
 
   ngOnInit(): void {
     listen('discovery', devices => {
-      this.zone.run(() => {
-          this.discoveredDevices.next(devices.payload as DiscoveredDevice[]);
-      });
+      this.discoveredDevices.next(devices.payload as DiscoveredDevice[]);
     });
 
     // only emit values if they are distinct from the previous value, use a deep comparison of the array elements
@@ -90,6 +94,12 @@ export class DiscoveryComponent {
 
   async copyToClipboard(text: string): Promise<void> {
     await writeText(text);
+
+    this.snackBar.open(`Copied to clipboard`, undefined, {
+      duration: 2000,
+      horizontalPosition: 'right',
+      verticalPosition: 'top'
+    });
   }
 
   trackBy(index: number, device: DiscoveredDevice): string {
