@@ -9,12 +9,12 @@ import { Observable, from } from 'rxjs';
 import { isEnabled, enable, disable } from 'tauri-plugin-autostart-api';
 
 @Component({
-    selector: 'app-main',
-    templateUrl: './main.component.html',
-    styleUrls: ['./main.component.css'],
-    imports: [ MatSlideToggleModule, MatButtonModule ],
-    changeDetection: ChangeDetectionStrategy.OnPush,
-    standalone: true
+  selector: 'app-main',
+  templateUrl: './main.component.html',
+  styleUrls: ['./main.component.css'],
+  imports: [MatSlideToggleModule, MatButtonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: true
 })
 export class MainComponent {
   @ViewChild(MatSlideToggle)
@@ -33,9 +33,9 @@ export class MainComponent {
 
   updateStartOnBoot(start: boolean): void {
     if (start) {
-      enable().then(() => {});
+      enable().then(() => { });
     } else {
-      disable().then(() => {});
+      disable().then(() => { });
     }
   }
 
