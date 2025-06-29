@@ -20,3 +20,15 @@ Currently the app exposes a Websocket API on port 17430. Example of an exchange:
 -> {"type":"request", "id":"3", "request":{"method":"stop-discovery"}}
 <- {"type":"response","id":"3","response":{"result":"ok"}}
 ```
+
+## Architecture
+
+```mermaid
+erDiagram
+    Server ||--|{ Connection : has
+    Connection ||--o{ ConnectedDevice : has
+    Bluetooth
+    Bluetooth {
+        DiscoveredDevice[] discoveredDevices
+    }
+```

@@ -1,35 +1,45 @@
-import { ChangeDetectionStrategy, Component, NgZone } from '@angular/core';
-import { DiscoveredDevice, ManufacturerData } from './discovered_device';
-import { BehaviorSubject, Observable, Subject, combineLatest, distinctUntilChanged, interval, map, sample } from 'rxjs';
-import { listen } from '@tauri-apps/api/event'
+import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { MatIcon } from '@angular/material/icon';
+import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatSlideToggle } from '@angular/material/slide-toggle';
+import { MatTableModule } from '@angular/material/table';
+import { PushPipe } from '@ngrx/component';
 import { writeText } from '@tauri-apps/api/clipboard';
-
+import { listen } from '@tauri-apps/api/event';
+import { BehaviorSubject, combineLatest, distinctUntilChanged, interval, map, Observable, sample } from 'rxjs';
+import { DiscoveredDevice } from './discovered_device';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 type DiscoveredDevicesFilter = (devices: DiscoveredDevice[]) => DiscoveredDevice[];
 
 const NoFilter: DiscoveredDevicesFilter = devices => devices;
-const CubingPrefixes = ['GAN', 'MG', 'AiCube', 'Gi', 'Mi Smart Magic Cube', 'GoCube', 'Rubiks', 'MHC'];
+const CubingPrefixes = ['GAN', 'MG', 'AiCube', 'Gi', 'Mi Smart Magic Cube', 'GoCube', 'Rubiks', 'MHC', 'WCU'];
 const DefaultName = 'Unnamed Device';
+const CubingDeviceFilter: DiscoveredDevicesFilter = devices => devices.filter(isCubingDevice);
+
+function isCubingDevice(device: DiscoveredDevice): boolean {
+  return CubingPrefixes.some(prefix => device.name?.startsWith(prefix));
+}
 
 @Component({
   selector: 'app-discovery',
   templateUrl: './discovery.component.html',
   styleUrls: ['./discovery.component.css'],
+  imports: [MatTableModule, MatSlideToggle, MatProgressSpinner, MatIcon, PushPipe, MatSnackBarModule ],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: true
 })
 export class DiscoveryComponent {
   discoveredDevices = new BehaviorSubject<DiscoveredDevice[]>([]);
   shownDevices!: Observable<DiscoveredDevice[]>;
-  columnsToDisplay = ['name', 'address', 'gan_encryption_key'];
-  discoveredDevicesFilter = new BehaviorSubject<DiscoveredDevicesFilter>(NoFilter);
+  displayedColumns = ['name', 'address', 'encryption_key'];
+  discoveredDevicesFilter = new BehaviorSubject(CubingDeviceFilter);
 
-  constructor(private zone: NgZone) { }
+  constructor(private snackBar: MatSnackBar) { }
 
   ngOnInit(): void {
     listen('discovery', devices => {
-      this.zone.run(() => {
-          this.discoveredDevices.next(devices.payload as DiscoveredDevice[]);
-      });
+      this.discoveredDevices.next(devices.payload as DiscoveredDevice[]);
     });
 
     // only emit values if they are distinct from the previous value, use a deep comparison of the array elements
@@ -60,14 +70,19 @@ export class DiscoveryComponent {
 
   showOnlyCubingDevices(showOnlyCubingDevices: boolean): void {
     if (showOnlyCubingDevices) {
-      this.discoveredDevicesFilter.next(devices => devices.filter(this.isCubingDevice));
+      this.discoveredDevicesFilter.next(CubingDeviceFilter);
     } else {
       this.discoveredDevicesFilter.next(NoFilter);
     }
   }
 
-  ganEncryptionKey(manufacturerData: ManufacturerData): string | undefined {
-    const manufacturerDataPart = manufacturerData[1];
+  encryptionKey(device: DiscoveredDevice): string | undefined {
+    if (!isCubingDevice(device) || device.manufacturer_data === undefined) {
+      return undefined;
+    }
+
+    const indexes = Object.keys(device.manufacturer_data).map(Number);
+    const manufacturerDataPart = device.manufacturer_data[indexes[0]];
 
     if (manufacturerDataPart === undefined) {
       return undefined;
@@ -78,16 +93,17 @@ export class DiscoveryComponent {
   }
 
   async copyToClipboard(text: string): Promise<void> {
-    console.log(text);
     await writeText(text);
+
+    this.snackBar.open(`Copied to clipboard`, undefined, {
+      duration: 2000,
+      horizontalPosition: 'right',
+      verticalPosition: 'top'
+    });
   }
 
   trackBy(index: number, device: DiscoveredDevice): string {
     return device.address ?? device.name ?? index.toString();
-  }
-
-  private isCubingDevice(device: DiscoveredDevice): boolean {
-    return CubingPrefixes.some(prefix => device.name?.startsWith(prefix));
   }
 }
 

@@ -3,11 +3,13 @@ use std::collections::HashMap;
 use btleplug::api::PeripheralProperties;
 use serde::{Deserialize, Serialize};
 
+use crate::bluetooth::device_id::DeviceId;
+
 type ManufacturerData = Option<HashMap<u16, Vec<u8>>>;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DiscoveredDevice {
-    pub id: String,
+    pub id: DeviceId,
     pub name: Option<String>,
     pub address: Option<String>,
     pub signal_strength: Option<i16>,

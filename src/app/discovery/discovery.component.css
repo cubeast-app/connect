@@ -1,23 +1,42 @@
 .container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin: 20px;
-    padding: 0;
-}
-
-.header {
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    align-items: baseline;
-    column-gap: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20px;
+  padding: 0;
 }
 
 mat-slide-toggle {
-    margin-bottom: 20px;
+  margin-bottom: 20px;
 }
 
 button {
-    cursor: pointer;
+  cursor: pointer;
+}
+
+.mat-spinner {
+  margin-top: 20px;
+}
+
+.header {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+
+  mat-slide-toggle {
+    flex-grow: 1;
+  }
+
+  mat-spinner {
+    flex-grow: 0;
+  }
+}
+
+.encryption-key-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
 }

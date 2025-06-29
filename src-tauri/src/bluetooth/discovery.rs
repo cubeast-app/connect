@@ -1,31 +1,26 @@
-use btleplug::platform::Adapter;
+use btleplug::{platform::Adapter, Error};
+use discovery_stream::DiscoveryStream;
 use tokio::sync::{
-    mpsc::Sender,
-    mpsc::{channel, error::SendError},
-    oneshot::{self, Receiver},
+    mpsc::{unbounded_channel, UnboundedSender},
+    oneshot::{self},
 };
 
-use self::{
-    discovery_actor::DiscoveryActor, discovery_message::DiscoveryMessage,
-    discovery_stream::DiscoveryStream,
-};
+use self::{discovery_actor::DiscoveryActor, discovery_message::DiscoveryMessage};
 
 pub mod discovered_device;
 mod discovery_actor;
 mod discovery_message;
 pub mod discovery_stream;
 
-const BUFFER: usize = 100;
-
 #[derive(Clone)]
 pub(crate) struct Discovery {
-    tx: Sender<DiscoveryMessage>,
+    tx: UnboundedSender<DiscoveryMessage>,
 }
 
 impl Discovery {
     pub fn start(adapter: Adapter) -> Self {
         let mut actor = DiscoveryActor::new(adapter);
-        let (tx, rx) = channel(BUFFER);
+        let (tx, rx) = unbounded_channel();
 
         tokio::spawn(async move {
             actor.run(rx).await;
@@ -34,23 +29,22 @@ impl Discovery {
         Self::new(tx)
     }
 
-    pub fn new(tx: Sender<DiscoveryMessage>) -> Self {
+    fn new(tx: UnboundedSender<DiscoveryMessage>) -> Self {
         Self { tx }
     }
 
-    pub async fn subscribe(
-        &self,
-    ) -> Result<Receiver<DiscoveryStream>, SendError<DiscoveryMessage>> {
+    pub async fn subscribe(&self) -> Result<DiscoveryStream, Error> {
         let (tx, rx) = oneshot::channel();
-        self.tx.send(DiscoveryMessage::Subscribe(tx)).await?;
+        self.tx
+            .send(DiscoveryMessage::Subscribe(tx))
+            .expect("Failed to send actor message");
 
-        Ok(rx)
+        rx.await.expect("Failed to receive discovery stream")
     }
 
-    pub async fn unsubscribe(&self) -> Result<Receiver<()>, SendError<DiscoveryMessage>> {
-        let (tx, rx) = oneshot::channel();
-        self.tx.send(DiscoveryMessage::Unsubscribe(tx)).await?;
-
-        Ok(rx)
+    pub async fn unsubscribe(&self) {
+        self.tx
+            .send(DiscoveryMessage::Unsubscribe)
+            .expect("Failed to send actor message");
     }
 }

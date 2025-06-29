@@ -3,7 +3,7 @@ use std::fmt::{self, Display, Formatter};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{bluetooth::discovery::discovered_device::DiscoveredDevice, device_id::DeviceId};
+use crate::bluetooth::{device_id::DeviceId, discovery::discovered_device::DiscoveredDevice};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "name", rename_all = "kebab-case")]

@@ -1,39 +1,41 @@
-import { Component, ViewChild } from '@angular/core';
-import { MatSlideToggle } from '@angular/material/slide-toggle';
-import { faCheck, faTimes } from '@fortawesome/free-solid-svg-icons';
+import { ChangeDetectionStrategy, Component, ViewChild } from '@angular/core';
+import { MatSlideToggle, MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatButtonModule } from '@angular/material/button';
 import { invoke } from '@tauri-apps/api';
 import { getVersion } from '@tauri-apps/api/app';
-import { TauriEvent, UnlistenFn, listen } from '@tauri-apps/api/event';
+import { TauriEvent } from '@tauri-apps/api/event';
 import { WebviewWindow } from '@tauri-apps/api/window';
-import { Observable, interval, mergeMap, from } from 'rxjs';
+import { Observable, from } from 'rxjs';
 import { isEnabled, enable, disable } from 'tauri-plugin-autostart-api';
 
 @Component({
   selector: 'app-main',
   templateUrl: './main.component.html',
-  styleUrls: ['./main.component.css']
+  styleUrls: ['./main.component.css'],
+  imports: [MatSlideToggleModule, MatButtonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: true
 })
 export class MainComponent {
   @ViewChild(MatSlideToggle)
   private timerComponent!: MatSlideToggle;
+
   appVersion!: string;
-  faCheck = faCheck;
-  faTimes = faTimes;
   discoverWebview: WebviewWindow | undefined;
 
   ngOnInit(): void {
     getVersion().then(version => this.appVersion = version);
     isEnabled().then(enabled => this.timerComponent.checked = enabled);
   }
-  
+
   ngOnDestroy(): void {
   }
 
   updateStartOnBoot(start: boolean): void {
     if (start) {
-      enable().then(() => {});
+      enable().then(() => { });
     } else {
-      disable().then(() => {});
+      disable().then(() => { });
     }
   }
 

@@ -66,8 +66,7 @@ impl Server {
 
             if let Ok(ws_stream) = ws_stream {
                 let (write, read) = ws_stream.split();
-                let connection = Connection::start(bluetooth.clone(), write);
-                connection.websocket_message_stream(read);
+                Connection::start(bluetooth.clone(), read, write);
             }
         }
     }
