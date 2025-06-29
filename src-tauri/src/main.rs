@@ -15,7 +15,6 @@
 )]
 
 mod bluetooth;
-mod main_controller;
 mod server;
 mod ui;
 mod version;
