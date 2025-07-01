@@ -137,11 +137,12 @@ impl ConnectionActor {
                     },
                 }
             }
-            Request::Disconnect { name } => {
-                self.bluetooth.disconnect(name).await;
-
-                Response::Ok
-            }
+            Request::Disconnect { name } => match self.bluetooth.disconnect(name).await {
+                Ok(()) => Response::Ok,
+                Err(error) => Response::Error {
+                    error: format!("Failed to disconnect from device: {:?}", error),
+                },
+            },
 
             /*
             Request::ReadCharacteristic {

@@ -26,7 +26,7 @@ enum BluetoothMessage {
     SubscribeToDiscovery(oneshot::Sender<Result<DiscoveryStream, Error>>),
     UnsubscribeFromDiscovery,
     Connect(String, oneshot::Sender<Result<DeviceData, Error>>),
-    Disconnect(String),
+    Disconnect(String, oneshot::Sender<Result<(), Error>>),
 }
 
 pub(crate) async fn adapter() -> Result<Adapter, Error> {
@@ -82,10 +82,13 @@ impl Bluetooth {
         rx.await.expect("Failed to receive connect response")
     }
 
-    pub async fn disconnect(&self, name: String) {
+    pub async fn disconnect(&self, name: String) -> Result<(), Error> {
+        let (tx, rx) = oneshot::channel();
         self.tx
-            .send(BluetoothMessage::Disconnect(name))
+            .send(BluetoothMessage::Disconnect(name, tx))
             .expect("Failed to send message to Bluetooth actor");
+
+        rx.await.expect("Failed to receive disconnect response")
     }
 }
 
@@ -118,8 +121,10 @@ impl BluetoothActor {
                         error!("Failed to send connect result");
                     }
                 }
-                BluetoothMessage::Disconnect(device_id) => {
-                    self.disconnect(device_id).await;
+                BluetoothMessage::Disconnect(device_id, result_tx) => {
+                    if let Err(_) = result_tx.send(self.disconnect(device_id).await) {
+                        error!("Failed to send disconnect result");
+                    }
                 }
             }
         }
@@ -188,23 +193,23 @@ impl BluetoothActor {
         Err(Error::DeviceNotFound)
     }
 
-    async fn disconnect(&mut self, name: String) {
-        let has_no_clients = if let Some(device) = self.connected_devices.get_mut(&name) {
+    async fn disconnect(&mut self, name: String) -> Result<(), Error> {
+        if let Some(device) = self.connected_devices.get_mut(&name) {
             device.remove_client();
-            device.has_no_clients()
+
+            if device.has_no_clients() {
+                let device = self.connected_devices.remove(&name);
+                info!("Disconnected from {}", name);
+
+                let device = device.unwrap();
+                device.peripheral.disconnect().await
+            } else {
+                Ok(())
+            }
         } else {
             error!("No connected device found with ID: {}", name);
-            false
-        };
 
-        if has_no_clients {
-            let device = self.connected_devices.remove(&name);
-            info!("Disconnected from {}", name);
-
-            let device = device.unwrap();
-            if let Err(e) = device.peripheral.disconnect().await {
-                error!("Failed to disconnect from {}: {:?}", name, e);
-            }
+            Err(Error::DeviceNotFound)
         }
     }
 }
