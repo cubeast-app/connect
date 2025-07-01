@@ -144,32 +144,30 @@ impl ConnectionActor {
                 },
             },
 
-            /*
             Request::ReadCharacteristic {
-                device_id,
+                device_name,
                 characteristic_id,
             } => {
                 let result = self
-                    .controller
-                    .read_characteristic(device_id, characteristic_id)
+                    .bluetooth
+                    .read_characteristic(device_name, characteristic_id)
                     .await;
 
-                if let Ok(value) = result {
-                    Response::Value { value }
-                } else {
-                    Response::Error {
-                        error: String::from("Failed to read characteristic"),
-                    }
+                match result {
+                    Ok(value) => Response::Value { value },
+                    Err(error) => Response::Error {
+                        error: format!("Failed to read characteristic: {:?}", error),
+                    },
                 }
             }
             Request::WriteCharacteristic {
-                device_id,
+                device_name,
                 characteristic_id,
                 value,
             } => {
                 let result = self
-                    .controller
-                    .write_characteristic(device_id, characteristic_id, value)
+                    .bluetooth
+                    .write_characteristic(device_name, characteristic_id, value)
                     .await;
 
                 if result.is_ok() {
@@ -180,6 +178,7 @@ impl ConnectionActor {
                     }
                 }
             }
+            /*
             Request::SubscribeCharacteristic {
                 device_id,
                 characteristic_id,
