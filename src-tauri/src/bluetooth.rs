@@ -1,27 +1,32 @@
+use std::collections::HashMap;
+
 use btleplug::{
-    api::Manager as _,
+    api::{Central, Manager as _, Peripheral},
     platform::{Adapter, Manager},
     Error,
 };
 use connected_device::ConnectedDevice;
-use device_id::DeviceId;
+use device_data::DeviceData;
 use discovery::discovery_stream::DiscoveryStream;
+use log::{error, info};
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     oneshot::{self},
 };
 
+use crate::bluetooth::discovery::discovered_device::DiscoveredDevice;
+
 use self::discovery::Discovery;
 
 pub mod connected_device;
-pub mod device_id;
+pub mod device_data;
 pub mod discovery;
 
 enum BluetoothMessage {
     SubscribeToDiscovery(oneshot::Sender<Result<DiscoveryStream, Error>>),
     UnsubscribeFromDiscovery,
-    Connect(DeviceId, oneshot::Sender<Result<ConnectedDevice, Error>>),
-    Disconnect(DeviceId, oneshot::Sender<Result<(), Error>>),
+    Connect(String, oneshot::Sender<Result<DeviceData, Error>>),
+    Disconnect(String, oneshot::Sender<Result<(), Error>>),
 }
 
 pub(crate) async fn adapter() -> Result<Adapter, Error> {
@@ -68,19 +73,19 @@ impl Bluetooth {
             .expect("Failed to send message to Bluetooth actor");
     }
 
-    pub async fn connect(&self, device_id: DeviceId) -> Result<ConnectedDevice, Error> {
+    pub async fn connect(&self, name: String) -> Result<DeviceData, Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
-            .send(BluetoothMessage::Connect(device_id, tx))
+            .send(BluetoothMessage::Connect(name, tx))
             .expect("Failed to send message to Bluetooth actor");
 
         rx.await.expect("Failed to receive connect response")
     }
 
-    pub async fn disconnect(&self, device_id: DeviceId) -> Result<(), Error> {
+    pub async fn disconnect(&self, name: String) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
-            .send(BluetoothMessage::Disconnect(device_id, tx))
+            .send(BluetoothMessage::Disconnect(name, tx))
             .expect("Failed to send message to Bluetooth actor");
 
         rx.await.expect("Failed to receive disconnect response")
@@ -90,25 +95,121 @@ impl Bluetooth {
 pub(crate) struct BluetoothActor {
     adapter: Adapter,
     discovery: Discovery,
+    connected_devices: HashMap<String, ConnectedDevice>,
 }
 
 impl BluetoothActor {
     fn new(adapter: Adapter, discovery: Discovery) -> Self {
-        Self { adapter, discovery }
+        Self {
+            adapter,
+            discovery,
+            connected_devices: HashMap::new(),
+        }
     }
 
     async fn run(&mut self, mut rx: UnboundedReceiver<BluetoothMessage>) {
         while let Some(message) = rx.recv().await {
             match message {
                 BluetoothMessage::SubscribeToDiscovery(result_tx) => {
-                    result_tx.send(self.discovery.subscribe().await);
+                    if let Err(_) = result_tx.send(self.discovery.subscribe().await) {
+                        error!("Failed to send discovery subscription result");
+                    }
                 }
                 BluetoothMessage::UnsubscribeFromDiscovery => self.discovery.unsubscribe().await,
-                BluetoothMessage::Connect(device_id, result_tx) => todo!(),
+                BluetoothMessage::Connect(device_id, result_tx) => {
+                    if let Err(_) = result_tx.send(self.connect(device_id).await) {
+                        error!("Failed to send connect result");
+                    }
+                }
                 BluetoothMessage::Disconnect(device_id, result_tx) => {
-                    todo!()
+                    if let Err(_) = result_tx.send(self.disconnect(device_id).await) {
+                        error!("Failed to send disconnect result");
+                    }
                 }
             }
+        }
+    }
+
+    async fn connect(&mut self, device_id: String) -> Result<DeviceData, Error> {
+        if let Some(device) = self.connected_devices.get_mut(&device_id) {
+            info!("Reusing existing connection to {}", device_id);
+
+            device.add_client();
+
+            return Ok((&*device).into());
+        }
+
+        let peripherals = self.adapter.peripherals().await?;
+
+        for peripheral in peripherals {
+            let properties = peripheral.properties().await?;
+            if let Some(properties) = properties {
+                if let Some(name) = properties.local_name {
+                    if name == device_id {
+                        info!("Found device: {}", device_id);
+
+                        // Connect to the peripheral
+                        peripheral.connect().await?;
+                        let properties = peripheral
+                            .properties()
+                            .await?
+                            .ok_or(Error::DeviceNotFound)?;
+                        let discovered_device: DiscoveredDevice =
+                            (device_id.clone(), properties).into();
+                        peripheral.discover_services().await?;
+                        let services = peripheral.services();
+
+                        // services BTree as HashMap
+                        let services: HashMap<_, _> = services
+                            .into_iter()
+                            .map(|s| (s.uuid.to_string(), s))
+                            .collect();
+                        /*
+                        let notification_stream = peripheral.notifications().await?;
+
+                        let notification_abort =
+                            Notifications::start(device_id.clone(), notification_stream));
+
+                        self.notification_aborts
+                            .insert(device_id.clone(), notification_abort);
+                            */
+
+                        info!("Connected to {}", device_id);
+
+                        let mut connected_device =
+                            ConnectedDevice::new(peripheral.clone(), discovered_device, services);
+
+                        connected_device.add_client();
+
+                        self.connected_devices
+                            .insert(device_id.clone(), connected_device.clone());
+
+                        return Ok((&connected_device).into());
+                    }
+                }
+            }
+        }
+
+        Err(Error::DeviceNotFound)
+    }
+
+    async fn disconnect(&mut self, name: String) -> Result<(), Error> {
+        if let Some(device) = self.connected_devices.get_mut(&name) {
+            device.remove_client();
+
+            if device.has_no_clients() {
+                let device = self.connected_devices.remove(&name);
+                info!("Disconnected from {}", name);
+
+                let device = device.unwrap();
+                device.peripheral.disconnect().await
+            } else {
+                Ok(())
+            }
+        } else {
+            error!("No connected device found with ID: {}", name);
+
+            Err(Error::DeviceNotFound)
         }
     }
 }

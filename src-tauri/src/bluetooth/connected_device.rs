@@ -1,51 +1,59 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use btleplug::platform::Peripheral as PlatformPeripheral;
-use uuid::Uuid;
+use btleplug::{api::Service, platform::Peripheral as PlatformPeripheral};
 
 use super::discovery::discovered_device::DiscoveredDevice;
 
-pub type WebsocketClientId = Uuid;
-
+#[derive(Debug, Clone)]
 pub struct ConnectedDevice {
-    clients: HashSet<WebsocketClientId>,
     pub peripheral: PlatformPeripheral,
     pub device: DiscoveredDevice,
-    pub services: Vec<Uuid>,
+    pub services: HashMap<String, Service>,
+    pub client_count: usize,
+    /*
     subscriptions: HashMap<Uuid, HashSet<WebsocketClientId>>,
+    */
 }
 
 impl ConnectedDevice {
     pub fn new(
         peripheral: PlatformPeripheral,
         device: DiscoveredDevice,
-        services: Vec<Uuid>,
+        services: HashMap<String, Service>,
     ) -> Self {
         Self {
-            clients: HashSet::new(),
             peripheral,
             device,
             services,
+            client_count: 0,
+            /*
+            clients: HashSet::new(),
             subscriptions: HashMap::new(),
+            */
         }
     }
 
-    pub fn add_client(&mut self, client_id: Uuid) {
-        self.clients.insert(client_id);
+    pub fn add_client(&mut self) {
+        self.client_count += 1;
     }
 
-    pub fn remove_client(&mut self, client_id: &Uuid) {
-        self.clients.remove(client_id);
+    pub fn remove_client(&mut self) {
+        if self.client_count > 0 {
+            self.client_count -= 1;
+        }
 
+        /*
         self.subscriptions.values_mut().for_each(|client_ids| {
             client_ids.remove(client_id);
         });
+        */
     }
 
     pub fn has_no_clients(&self) -> bool {
-        self.clients.is_empty()
+        self.client_count == 0
     }
 
+    /*
     pub fn client_ids(&self) -> Vec<WebsocketClientId> {
         self.clients.iter().cloned().collect()
     }
@@ -67,4 +75,5 @@ impl ConnectedDevice {
     pub fn remove_subscriptions_for_characteristic(&mut self, uuid: &Uuid) {
         self.subscriptions.remove(uuid);
     }
+    */
 }

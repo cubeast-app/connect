@@ -11,14 +11,17 @@ use tokio_tungstenite::tungstenite::Error as TungsteniteError;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::{self, tungstenite::Message as TungsteniteMessage};
 
-use crate::bluetooth::{
-    discovery::{discovered_device::DiscoveredDevice, discovery_stream::DiscoveryStream},
-    Bluetooth,
-};
 use crate::server::message::broadcast::Broadcast;
 use crate::server::message::request::Request;
 use crate::server::message::response::Response;
 use crate::version::VERSION;
+use crate::{
+    bluetooth::{
+        discovery::{discovered_device::DiscoveredDevice, discovery_stream::DiscoveryStream},
+        Bluetooth,
+    },
+    server::message::Message,
+};
 
 #[derive(Debug)]
 pub(super) enum ConnectionMessage {
@@ -26,7 +29,6 @@ pub(super) enum ConnectionMessage {
     WebsocketMessageReceived(Result<TungsteniteMessage, TungsteniteError>),
     /// An update from Bluetooth discovery
     DevicesDiscovered(Vec<DiscoveredDevice>),
-    Stop,
 }
 
 pub(super) struct ConnectionActor {
@@ -59,33 +61,34 @@ impl ConnectionActor {
                 ConnectionMessage::DevicesDiscovered(devices) => {
                     self.devices_discovered(devices).await
                 }
-                ConnectionMessage::Stop => todo!(),
             }
         }
     }
 
     async fn websocket_message(&mut self, message: Result<TungsteniteMessage, TungsteniteError>) {
-        let response = if let Ok(TungsteniteMessage::Text(text)) = &message {
-            let request: Result<Request, _> = serde_json::from_str(text);
+        let response_message = if let Ok(TungsteniteMessage::Text(text)) = &message {
+            let message: Result<Message, _> = serde_json::from_str(text);
 
-            if let Ok(request) = request {
-                Some(self.handle_request(request).await)
-            } else {
-                None
+            match message {
+                Ok(Message::Request { request, id }) => {
+                    let response = self.handle_request(request).await;
+                    Message::Response { response, id }
+                }
+                Ok(_) => Message::Error {
+                    message: "Request expected".to_owned(),
+                },
+
+                Err(error) => Message::Error {
+                    message: format!("Invalid message format or type: {:?}", error),
+                },
             }
         } else {
-            None
+            Message::Error {
+                message: "Invalid message format".to_owned(),
+            }
         };
 
-        let response = response.unwrap_or_else(|| {
-            warn!("Received invalid message from client: {:?}", message);
-
-            Response::Error {
-                error: String::from("Invalid message"),
-            }
-        });
-
-        let serialized = serde_json::to_string(&response).unwrap();
+        let serialized = serde_json::to_string(&response_message).unwrap();
         if let Err(err) = self
             .websocket_write
             .send(TungsteniteMessage::Text(serialized))
@@ -124,31 +127,23 @@ impl ConnectionActor {
                     Response::error("Discovery is not running")
                 }
             }
-            Request::Connect { id: name } => {
+            Request::Connect { name } => {
                 let result = self.bluetooth.connect(name).await;
 
-                if let Ok(discovered_device) = result {
-                    Response::Connected {
-                        device: discovered_device.device,
-                        services: discovered_device.services,
-                    }
-                } else {
-                    Response::Error {
-                        error: String::from("Failed to connect"),
-                    }
+                match result {
+                    Ok(device) => Response::Connected { device },
+                    Err(error) => Response::Error {
+                        error: format!("Failed to connect to device: {:?}", error),
+                    },
                 }
             }
-            Request::Disconnect { id: name } => {
-                let result = self.bluetooth.disconnect(name).await;
+            Request::Disconnect { name } => match self.bluetooth.disconnect(name).await {
+                Ok(()) => Response::Ok,
+                Err(error) => Response::Error {
+                    error: format!("Failed to disconnect from device: {:?}", error),
+                },
+            },
 
-                if result.is_ok() {
-                    Response::Ok
-                } else {
-                    Response::Error {
-                        error: String::from("Failed to disconnect"),
-                    }
-                }
-            }
             /*
             Request::ReadCharacteristic {
                 device_id,
