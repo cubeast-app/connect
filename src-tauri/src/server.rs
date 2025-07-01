@@ -2,7 +2,7 @@ use std::env;
 
 use futures_util::StreamExt;
 use http::{Response as HttpResponse, Uri};
-use log::info;
+use log::{info, trace};
 use tokio::net::TcpListener;
 use tokio_tungstenite::{
     self,
@@ -42,16 +42,26 @@ impl Server {
         );
 
         while let Ok((stream, _)) = listener.accept().await {
+            trace!("New connection from: {}", stream.peer_addr().unwrap());
+
             let ws_stream = tokio_tungstenite::accept_hdr_async(
                 stream,
                 |request: &Request, response: Response| -> Result<Response, ErrorResponse> {
                     let origin = request.headers().get("origin");
 
+                    // If ALLOW_ANY_ORIGIN is set, we allow any origin
+                    if env::var("ALLOW_ANY_ORIGIN").is_ok() {
+                        trace!("ALLOW_ANY_ORIGIN is set, allowing any origin");
+                        return Ok(response);
+                    }
+
                     if let Some(origin) = origin {
+                        trace!("Origin header: {:?}", origin);
                         let uri = origin.to_str().unwrap().parse::<Uri>().unwrap();
                         let host = uri.host();
 
                         if let Some(host) = host {
+                            trace!("Received connection from host: {}", host);
                             if ALLOWED_HOSTS.contains(&host) {
                                 return Ok(response);
                             }

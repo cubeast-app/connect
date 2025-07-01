@@ -3,12 +3,12 @@ use serde::{Deserialize, Serialize};
 use crate::bluetooth::device_id::DeviceId;
 
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "name", rename_all = "kebab-case")]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Request {
     StartDiscovery,
     StopDiscovery,
-    Connect { id: DeviceId },
-    Disconnect { id: DeviceId },
+    Connect { name: DeviceId },
+    Disconnect { name: DeviceId },
     /*
     ReadCharacteristic {
         device_id: DeviceId,
