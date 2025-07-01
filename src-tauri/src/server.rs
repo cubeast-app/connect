@@ -42,8 +42,6 @@ impl Server {
         );
 
         while let Ok((stream, _)) = listener.accept().await {
-            trace!("New connection from: {}", stream.peer_addr().unwrap());
-
             let ws_stream = tokio_tungstenite::accept_hdr_async(
                 stream,
                 |request: &Request, response: Response| -> Result<Response, ErrorResponse> {
@@ -57,13 +55,16 @@ impl Server {
 
                     if let Some(origin) = origin {
                         trace!("Origin header: {:?}", origin);
-                        let uri = origin.to_str().unwrap().parse::<Uri>().unwrap();
-                        let host = uri.host();
+                        let uri = origin.to_str().unwrap_or_default().parse::<Uri>();
 
-                        if let Some(host) = host {
-                            trace!("Received connection from host: {}", host);
-                            if ALLOWED_HOSTS.contains(&host) {
-                                return Ok(response);
+                        if let Ok(uri) = uri {
+                            let host = uri.host();
+
+                            if let Some(host) = host {
+                                trace!("Received connection from host: {}", host);
+                                if ALLOWED_HOSTS.contains(&host) {
+                                    return Ok(response);
+                                }
                             }
                         }
                     }

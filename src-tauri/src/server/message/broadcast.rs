@@ -3,22 +3,22 @@ use std::fmt::{self, Display, Formatter};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::bluetooth::{device_id::DeviceId, discovery::discovered_device::DiscoveredDevice};
+use crate::bluetooth::discovery::discovered_device::DiscoveredDevice;
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "name", rename_all = "kebab-case")]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Broadcast {
     DiscoveredDevices {
         devices: Vec<DiscoveredDevice>,
     },
     DiscoveryStopped,
     CharacteristicValue {
-        device_id: DeviceId,
+        device_name: String,
         characteristic_id: Uuid,
         value: Vec<u8>,
     },
     Disconnected {
-        device_id: DeviceId,
+        name: String,
     },
 }
 

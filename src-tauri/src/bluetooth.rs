@@ -7,7 +7,6 @@ use btleplug::{
 };
 use connected_device::ConnectedDevice;
 use device_data::DeviceData;
-use device_id::DeviceId;
 use discovery::discovery_stream::DiscoveryStream;
 use log::{error, info};
 use tokio::sync::{
@@ -21,14 +20,13 @@ use self::discovery::Discovery;
 
 pub mod connected_device;
 pub mod device_data;
-pub mod device_id;
 pub mod discovery;
 
 enum BluetoothMessage {
     SubscribeToDiscovery(oneshot::Sender<Result<DiscoveryStream, Error>>),
     UnsubscribeFromDiscovery,
-    Connect(DeviceId, oneshot::Sender<Result<DeviceData, Error>>),
-    Disconnect(DeviceId),
+    Connect(String, oneshot::Sender<Result<DeviceData, Error>>),
+    Disconnect(String),
 }
 
 pub(crate) async fn adapter() -> Result<Adapter, Error> {
@@ -75,18 +73,18 @@ impl Bluetooth {
             .expect("Failed to send message to Bluetooth actor");
     }
 
-    pub async fn connect(&self, device_id: DeviceId) -> Result<DeviceData, Error> {
+    pub async fn connect(&self, name: String) -> Result<DeviceData, Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
-            .send(BluetoothMessage::Connect(device_id, tx))
+            .send(BluetoothMessage::Connect(name, tx))
             .expect("Failed to send message to Bluetooth actor");
 
         rx.await.expect("Failed to receive connect response")
     }
 
-    pub async fn disconnect(&self, device_id: DeviceId) {
+    pub async fn disconnect(&self, name: String) {
         self.tx
-            .send(BluetoothMessage::Disconnect(device_id))
+            .send(BluetoothMessage::Disconnect(name))
             .expect("Failed to send message to Bluetooth actor");
     }
 }
@@ -94,7 +92,7 @@ impl Bluetooth {
 pub(crate) struct BluetoothActor {
     adapter: Adapter,
     discovery: Discovery,
-    connected_devices: HashMap<DeviceId, ConnectedDevice>,
+    connected_devices: HashMap<String, ConnectedDevice>,
 }
 
 impl BluetoothActor {
@@ -190,22 +188,22 @@ impl BluetoothActor {
         Err(Error::DeviceNotFound)
     }
 
-    async fn disconnect(&mut self, device_id: DeviceId) {
-        let has_no_clients = if let Some(device) = self.connected_devices.get_mut(&device_id) {
+    async fn disconnect(&mut self, name: String) {
+        let has_no_clients = if let Some(device) = self.connected_devices.get_mut(&name) {
             device.remove_client();
             device.has_no_clients()
         } else {
-            error!("No connected device found with ID: {}", device_id);
+            error!("No connected device found with ID: {}", name);
             false
         };
 
         if has_no_clients {
-            let device = self.connected_devices.remove(&device_id);
-            info!("Disconnected from {}", device_id);
+            let device = self.connected_devices.remove(&name);
+            info!("Disconnected from {}", name);
 
             let device = device.unwrap();
             if let Err(e) = device.peripheral.disconnect().await {
-                error!("Failed to disconnect from {}: {:?}", device_id, e);
+                error!("Failed to disconnect from {}: {:?}", name, e);
             }
         }
     }

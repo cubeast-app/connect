@@ -38,7 +38,9 @@ impl ConnectedDevice {
     }
 
     pub fn remove_client(&mut self) {
-        self.client_count -= 1;
+        if self.client_count > 0 {
+            self.client_count -= 1;
+        }
 
         /*
         self.subscriptions.values_mut().for_each(|client_ids| {
