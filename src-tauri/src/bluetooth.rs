@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use btleplug::{
-    api::{Central, Manager as _, Peripheral},
-    platform::{Adapter, Manager},
+    api::{Central, Characteristic, Manager as _, Peripheral},
+    platform::{Adapter, Manager, Peripheral as PlatformPeripheral},
     Error,
 };
 use connected_device::ConnectedDevice;
@@ -13,6 +13,7 @@ use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     oneshot::{self},
 };
+use uuid::Uuid;
 
 use crate::bluetooth::discovery::discovered_device::DiscoveredDevice;
 
@@ -27,6 +28,8 @@ enum BluetoothMessage {
     UnsubscribeFromDiscovery,
     Connect(String, oneshot::Sender<Result<DeviceData, Error>>),
     Disconnect(String, oneshot::Sender<Result<(), Error>>),
+    ReadCharacteristic(String, Uuid, oneshot::Sender<Result<Vec<u8>, Error>>),
+    WriteCharacteristic(String, Uuid, Vec<u8>, oneshot::Sender<Result<(), Error>>),
 }
 
 pub(crate) async fn adapter() -> Result<Adapter, Error> {
@@ -90,6 +93,43 @@ impl Bluetooth {
 
         rx.await.expect("Failed to receive disconnect response")
     }
+
+    pub async fn read_characteristic(
+        &self,
+        device_name: String,
+        characteristic_id: Uuid,
+    ) -> Result<Vec<u8>, Error> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(BluetoothMessage::ReadCharacteristic(
+                device_name,
+                characteristic_id,
+                tx,
+            ))
+            .expect("Failed to send message to Bluetooth actor");
+        rx.await
+            .expect("Failed to receive read characteristic response")
+    }
+
+    pub async fn write_characteristic(
+        &self,
+        device_name: String,
+        characteristic_id: Uuid,
+        value: Vec<u8>,
+    ) -> Result<(), Error> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(BluetoothMessage::WriteCharacteristic(
+                device_name,
+                characteristic_id,
+                value,
+                tx,
+            ))
+            .expect("Failed to send message to Bluetooth actor");
+
+        rx.await
+            .expect("Failed to receive write characteristic response")
+    }
 }
 
 pub(crate) struct BluetoothActor {
@@ -124,6 +164,18 @@ impl BluetoothActor {
                 BluetoothMessage::Disconnect(device_id, result_tx) => {
                     if let Err(_) = result_tx.send(self.disconnect(device_id).await) {
                         error!("Failed to send disconnect result");
+                    }
+                }
+                BluetoothMessage::ReadCharacteristic(device_name, uuid, sender) => {
+                    let result = self.read_characteristic(device_name, uuid).await;
+                    if let Err(_) = sender.send(result) {
+                        error!("Failed to send read characteristic result");
+                    }
+                }
+                BluetoothMessage::WriteCharacteristic(device_name, uuid, value, sender) => {
+                    let result = self.write_characteristic(device_name, uuid, value).await;
+                    if let Err(_) = sender.send(result) {
+                        error!("Failed to send write characteristic result");
                     }
                 }
             }
@@ -211,5 +263,47 @@ impl BluetoothActor {
 
             Err(Error::DeviceNotFound)
         }
+    }
+
+    async fn characteristic(
+        &self,
+        device_name: String,
+        uuid: Uuid,
+    ) -> Result<(PlatformPeripheral, Characteristic), Error> {
+        let peripheral = self
+            .connected_devices
+            .get(&device_name)
+            .ok_or(Error::DeviceNotFound)?
+            .peripheral
+            .clone();
+
+        let characteristic = peripheral
+            .characteristics()
+            .into_iter()
+            .find(|c| c.uuid == uuid)
+            .ok_or(Error::NoSuchCharacteristic)?;
+
+        Ok((peripheral, characteristic))
+    }
+
+    async fn read_characteristic(&self, device_name: String, uuid: Uuid) -> Result<Vec<u8>, Error> {
+        let (peripheral, characteristic) = self.characteristic(device_name, uuid).await?;
+        peripheral.read(&characteristic).await
+    }
+
+    async fn write_characteristic(
+        &self,
+        device_name: String,
+        uuid: Uuid,
+        value: Vec<u8>,
+    ) -> Result<(), Error> {
+        let (peripheral, characteristic) = self.characteristic(device_name, uuid).await?;
+        peripheral
+            .write(
+                &characteristic,
+                &value,
+                btleplug::api::WriteType::WithResponse,
+            )
+            .await
     }
 }
