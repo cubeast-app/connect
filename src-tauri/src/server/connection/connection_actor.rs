@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use futures_util::SinkExt;
 use futures_util::{
     stream::{SplitSink, SplitStream},
@@ -10,11 +12,15 @@ use tokio::{net::TcpStream, select, sync::mpsc::UnboundedSender};
 use tokio_tungstenite::tungstenite::Error as TungsteniteError;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::{self, tungstenite::Message as TungsteniteMessage};
+use uuid::Uuid;
 
 use crate::server::message::broadcast::Broadcast;
-use crate::server::message::request::Request;
 use crate::server::message::response::Response;
 use crate::version::VERSION;
+use crate::{
+    bluetooth::notifications::notification_stream::NotificationStream,
+    server::message::request::Request,
+};
 use crate::{
     bluetooth::{
         discovery::{discovered_device::DiscoveredDevice, discovery_stream::DiscoveryStream},
@@ -29,6 +35,11 @@ pub(super) enum ConnectionMessage {
     WebsocketMessageReceived(Result<TungsteniteMessage, TungsteniteError>),
     /// An update from Bluetooth discovery
     DevicesDiscovered(Vec<DiscoveredDevice>),
+    CharacteristicNotification {
+        device_name: String,
+        characteristic_id: Uuid,
+        value: Vec<u8>,
+    },
 }
 
 pub(super) struct ConnectionActor {
@@ -36,6 +47,7 @@ pub(super) struct ConnectionActor {
     self_tx: UnboundedSender<ConnectionMessage>,
     websocket_write: SplitSink<WebSocketStream<TcpStream>, TungsteniteMessage>,
     discovery_abort: Option<oneshot::Sender<()>>,
+    notification_aborts: HashMap<(String, Uuid), oneshot::Sender<()>>,
 }
 
 impl ConnectionActor {
@@ -49,6 +61,7 @@ impl ConnectionActor {
             self_tx,
             websocket_write: write,
             discovery_abort: None,
+            notification_aborts: HashMap::new(),
         }
     }
 
@@ -61,6 +74,14 @@ impl ConnectionActor {
                 ConnectionMessage::DevicesDiscovered(devices) => {
                     self.devices_discovered(devices).await
                 }
+                ConnectionMessage::CharacteristicNotification {
+                    device_name,
+                    characteristic_id,
+                    value,
+                } => {
+                    self.characteristic_notification(device_name, characteristic_id, value)
+                        .await
+                }
             }
         }
     }
@@ -71,7 +92,7 @@ impl ConnectionActor {
 
             match message {
                 Ok(Message::Request { request, id }) => {
-                    let response = self.handle_request(request).await;
+                    let response = self.request(request).await;
                     Message::Response { response, id }
                 }
                 Ok(_) => Message::Error {
@@ -79,7 +100,7 @@ impl ConnectionActor {
                 },
 
                 Err(error) => Message::Error {
-                    message: format!("Invalid message format or type: {:?}", error),
+                    message: format!("Invalid message format or type: {error:?}"),
                 },
             }
         } else {
@@ -111,36 +132,44 @@ impl ConnectionActor {
         }
     }
 
-    async fn handle_request(&mut self, request: Request) -> Response {
+    async fn characteristic_notification(
+        &mut self,
+        device_name: String,
+        characteristic_id: Uuid,
+        value: Vec<u8>,
+    ) {
+        let broadcast = Broadcast::CharacteristicValue {
+            device_name,
+            characteristic_id,
+            value,
+        };
+
+        let serialized = serde_json::to_string(&broadcast).unwrap();
+        let broadcast = TungsteniteMessage::Text(serialized);
+
+        if let Err(err) = self.websocket_write.send(broadcast).await {
+            warn!("Failed to send characteristic notification: {:?}", err);
+        }
+    }
+
+    async fn request(&mut self, request: Request) -> Response {
         match request {
-            Request::StartDiscovery => self.handle_start_discovery().await,
-            Request::StopDiscovery => {
-                if let Some(discovery_abort) = self.discovery_abort.take() {
-                    let result = discovery_abort.send(());
-
-                    if let Err(err) = result {
-                        error!("Failed to abort discovery: {:?}", err);
-                    }
-
-                    Response::Ok
-                } else {
-                    Response::error("Discovery is not running")
-                }
-            }
+            Request::StartDiscovery => self.start_discovery().await,
+            Request::StopDiscovery => self.stop_discovery(),
             Request::Connect { name } => {
                 let result = self.bluetooth.connect(name).await;
 
                 match result {
                     Ok(device) => Response::Connected { device },
                     Err(error) => Response::Error {
-                        error: format!("Failed to connect to device: {:?}", error),
+                        error: format!("Failed to connect to device: {error:?}"),
                     },
                 }
             }
             Request::Disconnect { name } => match self.bluetooth.disconnect(name).await {
                 Ok(()) => Response::Ok,
                 Err(error) => Response::Error {
-                    error: format!("Failed to disconnect from device: {:?}", error),
+                    error: format!("Failed to disconnect from device: {error:?}"),
                 },
             },
 
@@ -156,7 +185,7 @@ impl ConnectionActor {
                 match result {
                     Ok(value) => Response::Value { value },
                     Err(error) => Response::Error {
-                        error: format!("Failed to read characteristic: {:?}", error),
+                        error: format!("Failed to read characteristic: {error:?}"),
                     },
                 }
             }
@@ -165,60 +194,62 @@ impl ConnectionActor {
                 characteristic_id,
                 value,
             } => {
-                let result = self
-                    .bluetooth
-                    .write_characteristic(device_name, characteristic_id, value)
-                    .await;
-
-                if result.is_ok() {
-                    Response::Ok
-                } else {
-                    Response::Error {
-                        error: String::from("Failed to write characteristic"),
-                    }
-                }
+                self.write_characteristic(device_name, characteristic_id, value)
+                    .await
             }
-            /*
-            Request::SubscribeCharacteristic {
-                device_id,
+            Request::SubscribeToCharacteristic {
+                device_name,
                 characteristic_id,
             } => {
-                let result = self
-                    .controller
-                    .subscribe_characteristic(self.client_id, device_id, characteristic_id)
-                    .await;
-
-                if result.is_ok() {
-                    Response::Ok
-                } else {
-                    Response::Error {
-                        error: String::from("Failed to subscribe characteristic"),
-                    }
-                }
+                self.subscribe_to_characteristic(device_name, characteristic_id)
+                    .await
             }
-            Request::UnsubscribeCharacteristic {
-                device_id,
+            Request::UnsubscribeFromCharacteristic {
+                device_name,
                 characteristic_id,
             } => {
-                let result = self
-                    .controller
-                    .unsubscribe_characteristic(device_id, characteristic_id, &self.client_id)
-                    .await;
-
-                if result.is_ok() {
-                    Response::Ok
-                } else {
-                    Response::Error {
-                        error: String::from("Failed to unsubscribe characteristic"),
-                    }
-                }
+                self.unsubscribe_from_characteristic(device_name, characteristic_id)
+                    .await
             }
-            */
+
             Request::Version => Response::Version { version: VERSION },
         }
     }
 
-    pub(super) fn handle_websocket(&self, mut read: SplitStream<WebSocketStream<TcpStream>>) {
+    async fn write_characteristic(
+        &mut self,
+        device_name: String,
+        characteristic_id: Uuid,
+        value: Vec<u8>,
+    ) -> Response {
+        let result = self
+            .bluetooth
+            .write_characteristic(device_name, characteristic_id, value)
+            .await;
+        if result.is_ok() {
+            Response::Ok
+        } else {
+            Response::Error {
+                error: String::from("Failed to write characteristic"),
+            }
+        }
+    }
+
+    fn stop_discovery(&mut self) -> Response {
+        if let Some(discovery_abort) = self.discovery_abort.take() {
+            let result = discovery_abort.send(());
+
+            if let Err(err) = result {
+                error!("Failed to abort discovery: {:?}", err);
+            }
+
+            Response::Ok
+        } else {
+            Response::error("Discovery is not running")
+        }
+    }
+
+    pub(super) fn websocket(&self, mut read: SplitStream<WebSocketStream<TcpStream>>) {
         let tx = self.self_tx.clone();
 
         tokio::spawn(async move {
@@ -232,7 +263,7 @@ impl ConnectionActor {
         });
     }
 
-    async fn handle_start_discovery(&mut self) -> Response {
+    async fn start_discovery(&mut self) -> Response {
         let result = self.bluetooth.subscribe_to_discovery().await;
 
         match result {
@@ -282,5 +313,93 @@ impl ConnectionActor {
                 }
             }
         });
+    }
+
+    async fn subscribe_to_characteristic(
+        &mut self,
+        device_name: String,
+        characteristic_id: Uuid,
+    ) -> Response {
+        let result = self
+            .bluetooth
+            .subscribe_to_characteristic(device_name.clone(), characteristic_id)
+            .await;
+
+        match result {
+            Ok(notification_stream) => {
+                let abort_sender = self.notification_stream(
+                    notification_stream,
+                    device_name.clone(),
+                    characteristic_id,
+                );
+
+                self.notification_aborts
+                    .insert((device_name, characteristic_id), abort_sender);
+
+                Response::Ok
+            }
+            Err(err) => Response::Error {
+                error: format!("Failed to subscribe to characteristic: {err:?}"),
+            },
+        }
+    }
+
+    async fn unsubscribe_from_characteristic(
+        &mut self,
+        device_name: String,
+        characteristic_id: Uuid,
+    ) -> Response {
+        let result = self
+            .bluetooth
+            .unsubscribe_from_characteristic(device_name.clone(), characteristic_id)
+            .await;
+        if result.is_ok() {
+            if let Some(abort_sender) = self
+                .notification_aborts
+                .remove(&(device_name, characteristic_id))
+            {
+                let _ = abort_sender.send(());
+            }
+
+            Response::Ok
+        } else {
+            Response::Error {
+                error: String::from("Failed to unsubscribe characteristic"),
+            }
+        }
+    }
+
+    pub(crate) fn notification_stream(
+        &self,
+        mut notification_stream: NotificationStream,
+        device_name: String,
+        characteristic_id: Uuid,
+    ) -> oneshot::Sender<()> {
+        let (abort_sender, abort_receiver) = oneshot::channel();
+        let tx = self.self_tx.clone();
+
+        tokio::spawn(async move {
+            use futures_util::FutureExt;
+            let mut abort = Box::pin(abort_receiver).fuse();
+
+            loop {
+                select! {
+                    _ = (&mut abort) => {
+                        break;
+                    },
+                    notification = notification_stream.next() => {
+                        if let Some(value) = notification {
+                            if let Err(err) = tx.send(ConnectionMessage::CharacteristicNotification{device_name: device_name.clone(), characteristic_id, value: value.value}) {
+                                error!("Failed to send notification: {:?}", err);
+                            }
+                        } else {
+                            break;
+                        }
+                    },
+                }
+            }
+        });
+
+        abort_sender
     }
 }
