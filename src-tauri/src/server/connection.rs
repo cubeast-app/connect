@@ -23,7 +23,7 @@ impl Connection {
     ) -> Self {
         let (tx, rx) = unbounded_channel();
         let mut actor = ConnectionActor::new(bluetooth, tx.clone(), websocket_write);
-        actor.handle_websocket(websocket_read);
+        actor.websocket(websocket_read);
 
         tokio::spawn(async move {
             actor.run(rx).await;

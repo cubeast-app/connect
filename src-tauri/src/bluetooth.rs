@@ -9,19 +9,19 @@ use connected_device::ConnectedDevice;
 use device_data::DeviceData;
 use discovery::discovery_stream::DiscoveryStream;
 use log::{error, info};
+use notifications::notification_stream::NotificationStream;
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     oneshot::{self},
 };
 use uuid::Uuid;
 
-use crate::bluetooth::discovery::discovered_device::DiscoveredDevice;
-
 use self::discovery::Discovery;
 
 pub mod connected_device;
 pub mod device_data;
 pub mod discovery;
+pub mod notifications;
 
 enum BluetoothMessage {
     SubscribeToDiscovery(oneshot::Sender<Result<DiscoveryStream, Error>>),
@@ -30,6 +30,12 @@ enum BluetoothMessage {
     Disconnect(String, oneshot::Sender<Result<(), Error>>),
     ReadCharacteristic(String, Uuid, oneshot::Sender<Result<Vec<u8>, Error>>),
     WriteCharacteristic(String, Uuid, Vec<u8>, oneshot::Sender<Result<(), Error>>),
+    SubscribeToCharacteristic(
+        String,
+        Uuid,
+        oneshot::Sender<Result<NotificationStream, Error>>,
+    ),
+    UnsubscribeFromCharacteristic(String, Uuid, oneshot::Sender<Result<(), Error>>),
 }
 
 pub(crate) async fn adapter() -> Result<Adapter, Error> {
@@ -130,6 +136,41 @@ impl Bluetooth {
         rx.await
             .expect("Failed to receive write characteristic response")
     }
+
+    pub async fn subscribe_to_characteristic(
+        &self,
+        device_name: String,
+        characteristic_id: Uuid,
+    ) -> Result<NotificationStream, Error> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(BluetoothMessage::SubscribeToCharacteristic(
+                device_name,
+                characteristic_id,
+                tx,
+            ))
+            .expect("Failed to send message to Bluetooth actor");
+        rx.await
+            .expect("Failed to receive subscribe to characteristic response")
+    }
+
+    pub async fn unsubscribe_from_characteristic(
+        &self,
+        device_name: String,
+        characteristic_id: Uuid,
+    ) -> Result<(), Error> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(BluetoothMessage::UnsubscribeFromCharacteristic(
+                device_name,
+                characteristic_id,
+                tx,
+            ))
+            .expect("Failed to send message to Bluetooth actor");
+
+        rx.await
+            .expect("Failed to receive unsubscribe from characteristic response")
+    }
 }
 
 pub(crate) struct BluetoothActor {
@@ -151,40 +192,54 @@ impl BluetoothActor {
         while let Some(message) = rx.recv().await {
             match message {
                 BluetoothMessage::SubscribeToDiscovery(result_tx) => {
-                    if let Err(_) = result_tx.send(self.discovery.subscribe().await) {
+                    if result_tx.send(self.discovery.subscribe().await).is_err() {
                         error!("Failed to send discovery subscription result");
                     }
                 }
                 BluetoothMessage::UnsubscribeFromDiscovery => self.discovery.unsubscribe().await,
                 BluetoothMessage::Connect(device_id, result_tx) => {
-                    if let Err(_) = result_tx.send(self.connect(device_id).await) {
+                    if result_tx.send(self.connect(device_id).await).is_err() {
                         error!("Failed to send connect result");
                     }
                 }
                 BluetoothMessage::Disconnect(device_id, result_tx) => {
-                    if let Err(_) = result_tx.send(self.disconnect(device_id).await) {
-                        error!("Failed to send disconnect result");
+                    if let Err(err) = result_tx.send(self.disconnect(device_id).await) {
+                        error!("Failed to send disconnect result: {:?}", err);
                     }
                 }
                 BluetoothMessage::ReadCharacteristic(device_name, uuid, sender) => {
                     let result = self.read_characteristic(device_name, uuid).await;
-                    if let Err(_) = sender.send(result) {
+                    if sender.send(result).is_err() {
                         error!("Failed to send read characteristic result");
                     }
                 }
                 BluetoothMessage::WriteCharacteristic(device_name, uuid, value, sender) => {
                     let result = self.write_characteristic(device_name, uuid, value).await;
-                    if let Err(_) = sender.send(result) {
+                    if sender.send(result).is_err() {
                         error!("Failed to send write characteristic result");
+                    }
+                }
+                BluetoothMessage::SubscribeToCharacteristic(device_name, uuid, sender) => {
+                    let result = self.subscribe_to_characteristic(device_name, uuid).await;
+                    if sender.send(result).is_err() {
+                        error!("Failed to send subscribe to characteristic result");
+                    }
+                }
+                BluetoothMessage::UnsubscribeFromCharacteristic(device_name, uuid, sender) => {
+                    let result = self
+                        .unsubscribe_from_characteristic(device_name, uuid)
+                        .await;
+                    if sender.send(result).is_err() {
+                        error!("Failed to send unsubscribe from characteristic result");
                     }
                 }
             }
         }
     }
 
-    async fn connect(&mut self, device_id: String) -> Result<DeviceData, Error> {
-        if let Some(device) = self.connected_devices.get_mut(&device_id) {
-            info!("Reusing existing connection to {}", device_id);
+    async fn connect(&mut self, device_name: String) -> Result<DeviceData, Error> {
+        if let Some(device) = self.connected_devices.get_mut(&device_name) {
+            info!("Reusing existing connection to {}", device_name);
 
             device.add_client();
 
@@ -197,46 +252,23 @@ impl BluetoothActor {
             let properties = peripheral.properties().await?;
             if let Some(properties) = properties {
                 if let Some(name) = properties.local_name {
-                    if name == device_id {
-                        info!("Found device: {}", device_id);
+                    if name == device_name {
+                        info!("Found device: {}", device_name);
 
                         // Connect to the peripheral
                         peripheral.connect().await?;
-                        let properties = peripheral
-                            .properties()
-                            .await?
-                            .ok_or(Error::DeviceNotFound)?;
-                        let discovered_device: DiscoveredDevice =
-                            (device_id.clone(), properties).into();
-                        peripheral.discover_services().await?;
-                        let services = peripheral.services();
-
-                        // services BTree as HashMap
-                        let services: HashMap<_, _> = services
-                            .into_iter()
-                            .map(|s| (s.uuid.to_string(), s))
-                            .collect();
-                        /*
-                        let notification_stream = peripheral.notifications().await?;
-
-                        let notification_abort =
-                            Notifications::start(device_id.clone(), notification_stream));
-
-                        self.notification_aborts
-                            .insert(device_id.clone(), notification_abort);
-                            */
-
-                        info!("Connected to {}", device_id);
+                        info!("Connected to {}", device_name);
 
                         let mut connected_device =
-                            ConnectedDevice::new(peripheral.clone(), discovered_device, services);
+                            ConnectedDevice::start(peripheral.clone(), device_name.clone()).await?;
 
                         connected_device.add_client();
 
-                        self.connected_devices
-                            .insert(device_id.clone(), connected_device.clone());
+                        let device_data: DeviceData = (&connected_device).into();
 
-                        return Ok((&connected_device).into());
+                        self.connected_devices.insert(device_name, connected_device);
+
+                        return Ok(device_data);
                     }
                 }
             }
@@ -254,6 +286,7 @@ impl BluetoothActor {
                 info!("Disconnected from {}", name);
 
                 let device = device.unwrap();
+                device.notifications.stop().await;
                 device.peripheral.disconnect().await
             } else {
                 Ok(())
@@ -305,5 +338,33 @@ impl BluetoothActor {
                 btleplug::api::WriteType::WithResponse,
             )
             .await
+    }
+
+    async fn subscribe_to_characteristic(
+        &mut self,
+        device_name: String,
+        uuid: Uuid,
+    ) -> Result<NotificationStream, Error> {
+        let device = self
+            .connected_devices
+            .get_mut(&device_name)
+            .ok_or(Error::DeviceNotFound)?;
+
+        let notification_stream = device.notifications.subscribe(uuid).await?;
+
+        Ok(notification_stream)
+    }
+
+    async fn unsubscribe_from_characteristic(
+        &mut self,
+        device_name: String,
+        uuid: Uuid,
+    ) -> Result<(), Error> {
+        let device = self
+            .connected_devices
+            .get_mut(&device_name)
+            .ok_or(Error::DeviceNotFound)?;
+
+        device.notifications.unsubscribe(uuid).await
     }
 }

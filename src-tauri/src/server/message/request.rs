@@ -21,15 +21,13 @@ pub enum Request {
         characteristic_id: Uuid,
         value: Vec<u8>,
     },
-    /*
-    SubscribeCharacteristic {
-        device_id: DeviceId,
+    SubscribeToCharacteristic {
+        device_name: String,
         characteristic_id: Uuid,
     },
-    UnsubscribeCharacteristic {
-        device_id: DeviceId,
+    UnsubscribeFromCharacteristic {
+        device_name: String,
         characteristic_id: Uuid,
     },
-    */
     Version,
 }
