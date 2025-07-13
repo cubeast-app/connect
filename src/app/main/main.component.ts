@@ -22,6 +22,7 @@ export class MainComponent {
 
   appVersion!: string;
   discoverWebview: WebviewWindow | undefined;
+  helpWebview: WebviewWindow | undefined;
 
   ngOnInit(): void {
     getVersion().then(version => this.appVersion = version);
@@ -48,8 +49,9 @@ export class MainComponent {
       this.discoverWebview = new WebviewWindow('discovery', {
         title: 'Discovery',
         url: '/discovery',
-        width: 600,
-        height: 400,
+        width: 800,
+        height: 600,
+        center: true
       });
 
       this.discoverWebview.listen('tauri://error', function (e) {
@@ -72,5 +74,23 @@ export class MainComponent {
 
   private async stopDiscovery(): Promise<void> {
     return invoke("stop_discovery");
+  }
+
+  help(): void {
+    if (this.helpWebview === undefined) {
+      this.helpWebview = new WebviewWindow('help', {
+        title: 'Help',
+        url: '/help',
+        width: 800,
+        height: 600,
+        center: true
+      });
+
+      this.helpWebview.listen('tauri://error', function (e) {
+        console.error(e);
+      });
+    }
+
+    this.helpWebview.show();
   }
 }

@@ -1,0 +1,72 @@
+<div>
+  <mat-accordion>
+
+    <mat-expansion-panel>
+      <mat-expansion-panel-header>
+        <mat-panel-title>What is Cubeast Connect?</mat-panel-title>
+      </mat-expansion-panel-header>
+      <p>
+        Cubeast Connect allows Cubeast to connect to Bluetooth puzzles on your computer without having to rely on the
+        browser's Bluetooth capabilities. Historically Cubeast has always used the browser to connect to Bluetooth
+        devices,
+        but this had some issues:
+      </p>
+      <ul>
+        <li>Some browsers - like Firefox or Brave - simply don't support Bluetooth and thus cannot be used with Cubeast.
+        </li>
+        <li>Gan cubes use Bluetooth MAC address as a part of their encryption protocol. This was problematic because Web
+          Bluetooth doesn't
+          support reading the MAC address of Bluetooth devices. As a result, Cubeast had to rely on users manually
+          providing
+          the MAC address.
+        </li>
+        <li>Other browsers may have limitations or bugs in their Bluetooth implementations, leading to a suboptimal user
+          experience.</li>
+      </ul>
+      <p>
+        Cubeast Connect solves these issues by providing Cubeast direct access to Bluetooth devices through a native
+        application running on your computer.
+      </p>
+    </mat-expansion-panel>
+    <mat-expansion-panel>
+      <mat-expansion-panel-header>
+        <mat-panel-title>Does Cubeast Connect have to be running all the time when I want to use
+          Cubeast?</mat-panel-title>
+      </mat-expansion-panel-header>
+      <p>
+        Yes
+      </p>
+    </mat-expansion-panel>
+
+    <mat-expansion-panel>
+      <mat-expansion-panel-header>
+        <mat-panel-title>Can I use Cubeast without Cubeast Connect?</mat-panel-title>
+      </mat-expansion-panel-header>
+      <p>
+        Yes, you can still use Web Bluetooth if your browser supports it. Keep in mind however that your user experience
+        may be worse compared to using Cubeast Connect.
+      </p>
+    </mat-expansion-panel>
+
+    <mat-expansion-panel>
+      <mat-expansion-panel-header>
+        <mat-panel-title>Is Cubeast Connect open source?</mat-panel-title>
+      </mat-expansion-panel-header>
+      <p>
+        Yes, Cubeast Connect is open source. You can find the source code on <a
+          href="https://github.com/cubeast-app/connect" target="_blank">GitHub</a>.
+      </p>
+    </mat-expansion-panel>
+
+    <mat-expansion-panel>
+      <mat-expansion-panel-header>
+        <mat-panel-title>How do I report a bug?</mat-panel-title>
+      </mat-expansion-panel-header>
+      <p>
+        You can report bugs on the <a href="https://github.com/cubeast-app/connect/issues" target="_blank">GitHub
+          Issues</a> page.
+      </p>
+    </mat-expansion-panel>
+  </mat-accordion>
+
+</div>
