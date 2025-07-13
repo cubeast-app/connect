@@ -1,5 +1,9 @@
 # Cubeast Connect
 
+## Warning
+
+As of now Cubeast Connect is not supported by Cubeast.
+
 ## About
 
 Cubeast Connect is a Bluetooth proxy for Windows, MacOS and Linux. It uses system native Bluetooth API to provide a Websocket API to connect to Bluetooth devices.
