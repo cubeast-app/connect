@@ -1,0 +1,40 @@
+<div class="device-details">
+  <ng-container *ngrxLet="deviceDetails; let details">
+    @if (details) {
+    <div>
+      <p><strong>Name:</strong> {{ details.name }}</p>
+      <p><strong>Address:</strong> {{ details.address }}</p>
+      <p><strong>Manufacturer Data:</strong> {{ details.manufacturer_data | json }}</p>
+      <p><strong>Services:</strong></p>
+      <ul>
+        <li *ngFor="let service of details.services">
+          {{ service.uuid }}
+          <ul>
+            <li *ngFor="let characteristic of service.characteristics">
+              {{ characteristic.uuid }}
+              <span *ngIf="characteristic.read">[Read]</span>
+              <span *ngIf="characteristic.write">[Write]</span>
+              <span *ngIf="characteristic.notify">[Notify]</span>
+            </li>
+          </ul>
+        </li>
+      </ul>
+
+      <button mat-raised-button color="primary" (click)="copyToClipboard()">Copy to clipboard</button>
+    </div>
+    } @else {
+      @if (details === null) {
+      <div class="error-message">
+        <p>Failed to connect to device. Make sure it's powered on and it's not already connected to another computer or
+          phone.</p>
+        <button mat-raised-button color="warn" (click)="tryAgain()">Try Again</button>
+      </div>
+      } @else {
+      <div class="loading-message">
+        <p>Loading device details, this may take a moment...</p>
+        <mat-spinner diameter="20"></mat-spinner>
+      </div>
+      }
+    }
+  </ng-container>
+</div>

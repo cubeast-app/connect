@@ -57,23 +57,9 @@ export class MainComponent {
       this.discoverWebview.listen('tauri://error', function (e) {
         console.error(e);
       });
-
-      this.discoverWebview.listen(TauriEvent.WINDOW_CLOSE_REQUESTED, () => {
-        this.stopDiscovery().catch(console.error);
-      });
     }
 
     this.discoverWebview.show();
-
-    this.startDiscovery().catch(console.error);
-  }
-
-  private async startDiscovery(): Promise<void> {
-    return invoke("start_discovery");
-  }
-
-  private async stopDiscovery(): Promise<void> {
-    return invoke("stop_discovery");
   }
 
   help(): void {

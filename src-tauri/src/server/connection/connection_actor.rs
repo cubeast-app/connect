@@ -157,7 +157,7 @@ impl ConnectionActor {
             Request::StartDiscovery => self.start_discovery().await,
             Request::StopDiscovery => self.stop_discovery(),
             Request::Connect { name } => {
-                let result = self.bluetooth.connect(name).await;
+                let result = self.bluetooth.connect(&name).await;
 
                 match result {
                     Ok(device) => Response::Connected { device },
@@ -166,7 +166,7 @@ impl ConnectionActor {
                     },
                 }
             }
-            Request::Disconnect { name } => match self.bluetooth.disconnect(name).await {
+            Request::Disconnect { name } => match self.bluetooth.disconnect(&name).await {
                 Ok(()) => Response::Ok,
                 Err(error) => Response::Error {
                     error: format!("Failed to disconnect from device: {error:?}"),
@@ -179,7 +179,7 @@ impl ConnectionActor {
             } => {
                 let result = self
                     .bluetooth
-                    .read_characteristic(device_name, characteristic_id)
+                    .read_characteristic(&device_name, characteristic_id)
                     .await;
 
                 match result {
@@ -224,7 +224,7 @@ impl ConnectionActor {
     ) -> Response {
         let result = self
             .bluetooth
-            .write_characteristic(device_name, characteristic_id, value)
+            .write_characteristic(&device_name, characteristic_id, value)
             .await;
         if result.is_ok() {
             Response::Ok
@@ -322,7 +322,7 @@ impl ConnectionActor {
     ) -> Response {
         let result = self
             .bluetooth
-            .subscribe_to_characteristic(device_name.clone(), characteristic_id)
+            .subscribe_to_characteristic(&device_name, characteristic_id)
             .await;
 
         match result {
@@ -351,7 +351,7 @@ impl ConnectionActor {
     ) -> Response {
         let result = self
             .bluetooth
-            .unsubscribe_from_characteristic(device_name.clone(), characteristic_id)
+            .unsubscribe_from_characteristic(&device_name, characteristic_id)
             .await;
         if result.is_ok() {
             if let Some(abort_sender) = self

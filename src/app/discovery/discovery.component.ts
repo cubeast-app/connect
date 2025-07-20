@@ -3,12 +3,14 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
 import { MatTableModule } from '@angular/material/table';
-import { PushPipe } from '@ngrx/component';
+import { LetDirective, PushPipe } from '@ngrx/component';
 import { writeText } from '@tauri-apps/api/clipboard';
-import { listen } from '@tauri-apps/api/event';
+import { listen, TauriEvent } from '@tauri-apps/api/event';
 import { BehaviorSubject, combineLatest, distinctUntilChanged, interval, map, Observable, sample } from 'rxjs';
-import { DiscoveredDevice } from './discovered_device';
+import { DiscoveredDevice } from './discovered-device';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { WebviewWindow } from '@tauri-apps/api/window';
+import { invoke } from '@tauri-apps/api';
 
 type DiscoveredDevicesFilter = (devices: DiscoveredDevice[]) => DiscoveredDevice[];
 
@@ -16,6 +18,7 @@ const NoFilter: DiscoveredDevicesFilter = devices => devices;
 const CubingPrefixes = ['GAN', 'MG', 'AiCube', 'Gi', 'Mi Smart Magic Cube', 'GoCube', 'Rubiks', 'MHC', 'WCU'];
 const DefaultName = 'Unnamed Device';
 const CubingDeviceFilter: DiscoveredDevicesFilter = devices => devices.filter(isCubingDevice);
+const ScanTimeout = 30000;
 
 function isCubingDevice(device: DiscoveredDevice): boolean {
   return CubingPrefixes.some(prefix => device.name?.startsWith(prefix));
@@ -25,15 +28,17 @@ function isCubingDevice(device: DiscoveredDevice): boolean {
   selector: 'app-discovery',
   templateUrl: './discovery.component.html',
   styleUrls: ['./discovery.component.css'],
-  imports: [MatTableModule, MatSlideToggle, MatProgressSpinner, MatIcon, PushPipe, MatSnackBarModule ],
+  imports: [MatTableModule, MatSlideToggle, MatProgressSpinner, MatIcon, MatSnackBarModule, LetDirective ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true
 })
 export class DiscoveryComponent {
   discoveredDevices = new BehaviorSubject<DiscoveredDevice[]>([]);
   shownDevices!: Observable<DiscoveredDevice[]>;
-  displayedColumns = ['name', 'address', 'encryption_key'];
+  displayedColumns = ['name', 'address', 'encryption_key', 'actions'];
   discoveredDevicesFilter = new BehaviorSubject(CubingDeviceFilter);
+  detailsWebview: WebviewWindow | undefined;
+  isScanning = false;
 
   constructor(private snackBar: MatSnackBar) { }
 
@@ -66,6 +71,8 @@ export class DiscoveryComponent {
         }
       });
     }));
+
+    this.reScan();
   }
 
   showOnlyCubingDevices(showOnlyCubingDevices: boolean): void {
@@ -102,8 +109,54 @@ export class DiscoveryComponent {
     });
   }
 
+  details(device: DiscoveredDevice): void {
+    if (this.detailsWebview === undefined) {
+      this.detailsWebview = new WebviewWindow('device-details', {
+        title: 'Device Details',
+        url: '/device-details/' + device.name,
+        width: 600,
+        height: 400,
+        center: true
+      });
+
+      this.detailsWebview.listen('tauri://error', function (e) {
+        console.error(e);
+      });
+    }
+
+    this.detailsWebview.show();
+  }
+
   trackBy(index: number, device: DiscoveredDevice): string {
     return device.address ?? device.name ?? index.toString();
+  }
+
+  reScan(): void {
+    this.isScanning = false;
+    this.discoveredDevices.next([]);
+
+    this.startDiscovery().catch(() => {
+      this.snackBar.open('Failed to start discovery', undefined, {
+        duration: 2000,
+        horizontalPosition: 'right',
+        verticalPosition: 'top'
+      });
+    });
+  }
+
+  private async startDiscovery(): Promise<void> {
+    await invoke("start_discovery");
+
+    this.isScanning = true;
+
+    setTimeout(() => {
+      this.stopDiscovery().catch(console.error);
+    }, ScanTimeout);
+  }
+
+  private async stopDiscovery(): Promise<void> {
+    this.isScanning = false;
+    return invoke("stop_discovery");
   }
 }
 

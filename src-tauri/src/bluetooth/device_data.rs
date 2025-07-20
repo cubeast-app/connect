@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use service::ServiceData;
 
@@ -10,6 +12,8 @@ pub mod service;
 pub struct DeviceData {
     pub id: String,
     pub name: Option<String>,
+    pub address: Option<String>,
+    pub manufacturer_data: Option<HashMap<u16, Vec<u8>>>,
     pub services: Vec<ServiceData>,
 }
 
@@ -20,6 +24,8 @@ impl From<&ConnectedDevice> for DeviceData {
         Self {
             id: device.device.id.to_string(),
             name: device.device.name.clone(),
+            address: device.device.address.clone(),
+            manufacturer_data: device.device.manufacturer_data.clone(),
             services,
         }
     }

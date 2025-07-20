@@ -82,19 +82,19 @@ impl Bluetooth {
             .expect("Failed to send message to Bluetooth actor");
     }
 
-    pub async fn connect(&self, name: String) -> Result<DeviceData, Error> {
+    pub async fn connect(&self, name: &String) -> Result<DeviceData, Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
-            .send(BluetoothMessage::Connect(name, tx))
+            .send(BluetoothMessage::Connect((*name).clone(), tx))
             .expect("Failed to send message to Bluetooth actor");
 
         rx.await.expect("Failed to receive connect response")
     }
 
-    pub async fn disconnect(&self, name: String) -> Result<(), Error> {
+    pub async fn disconnect(&self, name: &String) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
-            .send(BluetoothMessage::Disconnect(name, tx))
+            .send(BluetoothMessage::Disconnect((*name).clone(), tx))
             .expect("Failed to send message to Bluetooth actor");
 
         rx.await.expect("Failed to receive disconnect response")
@@ -102,13 +102,13 @@ impl Bluetooth {
 
     pub async fn read_characteristic(
         &self,
-        device_name: String,
+        device_name: &String,
         characteristic_id: Uuid,
     ) -> Result<Vec<u8>, Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
             .send(BluetoothMessage::ReadCharacteristic(
-                device_name,
+                (*device_name).clone(),
                 characteristic_id,
                 tx,
             ))
@@ -119,14 +119,14 @@ impl Bluetooth {
 
     pub async fn write_characteristic(
         &self,
-        device_name: String,
+        device_name: &String,
         characteristic_id: Uuid,
         value: Vec<u8>,
     ) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
             .send(BluetoothMessage::WriteCharacteristic(
-                device_name,
+                (*device_name).clone(),
                 characteristic_id,
                 value,
                 tx,
@@ -139,13 +139,13 @@ impl Bluetooth {
 
     pub async fn subscribe_to_characteristic(
         &self,
-        device_name: String,
+        device_name: &String,
         characteristic_id: Uuid,
     ) -> Result<NotificationStream, Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
             .send(BluetoothMessage::SubscribeToCharacteristic(
-                device_name,
+                (*device_name).clone(),
                 characteristic_id,
                 tx,
             ))
@@ -156,13 +156,13 @@ impl Bluetooth {
 
     pub async fn unsubscribe_from_characteristic(
         &self,
-        device_name: String,
+        device_name: &String,
         characteristic_id: Uuid,
     ) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
             .send(BluetoothMessage::UnsubscribeFromCharacteristic(
-                device_name,
+                (*device_name).clone(),
                 characteristic_id,
                 tx,
             ))
