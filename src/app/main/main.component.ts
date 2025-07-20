@@ -1,12 +1,11 @@
 import { ChangeDetectionStrategy, Component, ViewChild } from '@angular/core';
-import { MatSlideToggle, MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatButtonModule } from '@angular/material/button';
+import { MatSlideToggle, MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { invoke } from '@tauri-apps/api';
 import { getVersion } from '@tauri-apps/api/app';
-import { TauriEvent } from '@tauri-apps/api/event';
 import { WebviewWindow } from '@tauri-apps/api/window';
 import { Observable, from } from 'rxjs';
-import { isEnabled, enable, disable } from 'tauri-plugin-autostart-api';
+import { disable, enable, isEnabled } from 'tauri-plugin-autostart-api';
 
 @Component({
   selector: 'app-main',

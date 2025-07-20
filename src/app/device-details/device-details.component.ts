@@ -4,17 +4,18 @@ import { DeviceData } from './device-data';
 import { CommonModule } from '@angular/common';
 import { invoke } from '@tauri-apps/api';
 import { ActivatedRoute } from '@angular/router';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, first } from 'rxjs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { writeText } from '@tauri-apps/api/clipboard';
 import { LetDirective, PushPipe } from '@ngrx/component';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatButtonModule } from '@angular/material/button';
 
 @Component({
   selector: 'app-device-details',
   templateUrl: './device-details.component.html',
   styleUrls: ['./device-details.component.css'],
-  imports: [CommonModule, MatProgressSpinnerModule, LetDirective, MatSnackBarModule],
+  imports: [CommonModule, MatProgressSpinnerModule, LetDirective, MatSnackBarModule, MatButtonModule],
   standalone: true
 })
 export class DeviceDetailsComponent implements OnInit {
@@ -42,7 +43,7 @@ export class DeviceDetailsComponent implements OnInit {
   }
 
   copyToClipboard(): void {
-    this.deviceDetails.subscribe(device => {
+    this.deviceDetails.pipe(first()).subscribe(device => {
       if (device) {
         const deviceInfo = JSON.stringify(device, null, 2);
         writeText(deviceInfo).then(() => {

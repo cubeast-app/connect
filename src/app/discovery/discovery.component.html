@@ -5,7 +5,7 @@
     @if (isScanning) {
       <mat-spinner diameter="20"></mat-spinner>
     } @else {
-      <button mat-raised-button color="primary" (click)="reScan()">Re-scan</button>
+      <button mat-flat-button (click)="reScan()">Re-scan</button>
     }
   </div>
   <ng-container *ngrxLet="shownDevices; let devices">
@@ -37,7 +37,7 @@
       <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef></th>
         <td mat-cell *matCellDef="let device">
-          <button mat-icon-button (click)="details(device)">
+          <button mat-flat-button (click)="details(device)">
             Details
           </button>
         </td>

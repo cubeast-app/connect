@@ -11,6 +11,7 @@ import { DiscoveredDevice } from './discovered-device';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { WebviewWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api';
+import { MatButtonModule } from '@angular/material/button';
 
 type DiscoveredDevicesFilter = (devices: DiscoveredDevice[]) => DiscoveredDevice[];
 
@@ -28,7 +29,7 @@ function isCubingDevice(device: DiscoveredDevice): boolean {
   selector: 'app-discovery',
   templateUrl: './discovery.component.html',
   styleUrls: ['./discovery.component.css'],
-  imports: [MatTableModule, MatSlideToggle, MatProgressSpinner, MatIcon, MatSnackBarModule, LetDirective ],
+  imports: [MatTableModule, MatSlideToggle, MatProgressSpinner, MatIcon, MatSnackBarModule, LetDirective, MatButtonModule ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true
 })
