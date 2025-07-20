@@ -42,8 +42,8 @@ Currently the app exposes a Websocket API on port 17430. Example of an exchange:
     ]}
 -> {"type":"request", "id":"3", "request":{"type":"stop-discovery"}}
 <- {"type":"response","id":"3","response":{"result":"ok"}}
--> {"type":"request", "id":"4", "request":{"type":"write-characteristic", "device_name": "GANicE2_9FCB", "characteristic_id": "0000fff5-0000-1000-8000-00805f9b34fb", "value":[210, 13, 5, 57, 119, 0, 0, 1, 35, 69, 103, 137, 171, 0, 0, 0]}}
+-> {"type":"request", "id":"4", "request":{"type":"write-characteristic", "device_id": "hci0/dev_70_19_88_8F_9F_CB", "characteristic_id": "0000fff5-0000-1000-8000-00805f9b34fb", "value":[210, 13, 5, 57, 119, 0, 0, 1, 35, 69, 103, 137, 171, 0, 0, 0]}}
 <- {"type":"response", "id":"4", "response":{"result":"ok"}}
--> {"type":"request", "id":"5", "request":{"type":"subscribe-to-characteristic", "device_name": "GANicE2_9FCB", "characteristic_id": "0000fff6-0000-1000-8000-00805f9b34fb"}}
--> {"type":"request", "id":"6", "request":{"type":"unsubscribe-from-characteristic", "device_name": "GANicE2_9FCB", "characteristic_id": "0000fff6-0000-1000-8000-00805f9b34fb"}}
+-> {"type":"request", "id":"5", "request":{"type":"subscribe-to-characteristic", "device_id": "hci0/dev_70_19_88_8F_9F_CB", "characteristic_id": "0000fff6-0000-1000-8000-00805f9b34fb"}}
+-> {"type":"request", "id":"6", "request":{"type":"unsubscribe-from-characteristic", "device_id": "hci0/dev_70_19_88_8F_9F_CB", "characteristic_id": "0000fff6-0000-1000-8000-00805f9b34fb"}}
 ```

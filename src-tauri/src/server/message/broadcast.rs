@@ -12,12 +12,12 @@ pub enum Broadcast {
         devices: Vec<DiscoveredDevice>,
     },
     CharacteristicValue {
-        device_name: String,
+        device_id: String,
         characteristic_id: Uuid,
         value: Vec<u8>,
     },
     Disconnected {
-        name: String,
+        device_id: String,
     },
 }
 

@@ -36,7 +36,7 @@ pub(super) enum ConnectionMessage {
     /// An update from Bluetooth discovery
     DevicesDiscovered(Vec<DiscoveredDevice>),
     CharacteristicNotification {
-        device_name: String,
+        device_id: String,
         characteristic_id: Uuid,
         value: Vec<u8>,
     },
@@ -75,11 +75,11 @@ impl ConnectionActor {
                     self.devices_discovered(devices).await
                 }
                 ConnectionMessage::CharacteristicNotification {
-                    device_name,
+                    device_id,
                     characteristic_id,
                     value,
                 } => {
-                    self.characteristic_notification(device_name, characteristic_id, value)
+                    self.characteristic_notification(device_id, characteristic_id, value)
                         .await
                 }
             }
@@ -134,12 +134,12 @@ impl ConnectionActor {
 
     async fn characteristic_notification(
         &mut self,
-        device_name: String,
+        device_id: String,
         characteristic_id: Uuid,
         value: Vec<u8>,
     ) {
         let broadcast = Broadcast::CharacteristicValue {
-            device_name,
+            device_id,
             characteristic_id,
             value,
         };
@@ -156,8 +156,8 @@ impl ConnectionActor {
         match request {
             Request::StartDiscovery => self.start_discovery().await,
             Request::StopDiscovery => self.stop_discovery(),
-            Request::Connect { name } => {
-                let result = self.bluetooth.connect(&name).await;
+            Request::Connect { device_id } => {
+                let result = self.bluetooth.connect(&device_id).await;
 
                 match result {
                     Ok(device) => Response::Connected { device },
@@ -166,20 +166,22 @@ impl ConnectionActor {
                     },
                 }
             }
-            Request::Disconnect { name } => match self.bluetooth.disconnect(&name).await {
-                Ok(()) => Response::Ok,
-                Err(error) => Response::Error {
-                    error: format!("Failed to disconnect from device: {error:?}"),
-                },
-            },
+            Request::Disconnect { device_id } => {
+                match self.bluetooth.disconnect(&device_id).await {
+                    Ok(()) => Response::Ok,
+                    Err(error) => Response::Error {
+                        error: format!("Failed to disconnect from device: {error:?}"),
+                    },
+                }
+            }
 
             Request::ReadCharacteristic {
-                device_name,
+                device_id,
                 characteristic_id,
             } => {
                 let result = self
                     .bluetooth
-                    .read_characteristic(&device_name, characteristic_id)
+                    .read_characteristic(&device_id, characteristic_id)
                     .await;
 
                 match result {
@@ -190,25 +192,25 @@ impl ConnectionActor {
                 }
             }
             Request::WriteCharacteristic {
-                device_name,
+                device_id,
                 characteristic_id,
                 value,
             } => {
-                self.write_characteristic(device_name, characteristic_id, value)
+                self.write_characteristic(device_id, characteristic_id, value)
                     .await
             }
             Request::SubscribeToCharacteristic {
-                device_name,
+                device_id,
                 characteristic_id,
             } => {
-                self.subscribe_to_characteristic(device_name, characteristic_id)
+                self.subscribe_to_characteristic(device_id, characteristic_id)
                     .await
             }
             Request::UnsubscribeFromCharacteristic {
-                device_name,
+                device_id,
                 characteristic_id,
             } => {
-                self.unsubscribe_from_characteristic(device_name, characteristic_id)
+                self.unsubscribe_from_characteristic(device_id, characteristic_id)
                     .await
             }
 
@@ -218,13 +220,13 @@ impl ConnectionActor {
 
     async fn write_characteristic(
         &mut self,
-        device_name: String,
+        device_id: String,
         characteristic_id: Uuid,
         value: Vec<u8>,
     ) -> Response {
         let result = self
             .bluetooth
-            .write_characteristic(&device_name, characteristic_id, value)
+            .write_characteristic(&device_id, characteristic_id, value)
             .await;
         if result.is_ok() {
             Response::Ok
@@ -317,24 +319,24 @@ impl ConnectionActor {
 
     async fn subscribe_to_characteristic(
         &mut self,
-        device_name: String,
+        device_id: String,
         characteristic_id: Uuid,
     ) -> Response {
         let result = self
             .bluetooth
-            .subscribe_to_characteristic(&device_name, characteristic_id)
+            .subscribe_to_characteristic(&device_id, characteristic_id)
             .await;
 
         match result {
             Ok(notification_stream) => {
                 let abort_sender = self.notification_stream(
                     notification_stream,
-                    device_name.clone(),
+                    device_id.clone(),
                     characteristic_id,
                 );
 
                 self.notification_aborts
-                    .insert((device_name, characteristic_id), abort_sender);
+                    .insert((device_id, characteristic_id), abort_sender);
 
                 Response::Ok
             }
@@ -346,17 +348,17 @@ impl ConnectionActor {
 
     async fn unsubscribe_from_characteristic(
         &mut self,
-        device_name: String,
+        device_id: String,
         characteristic_id: Uuid,
     ) -> Response {
         let result = self
             .bluetooth
-            .unsubscribe_from_characteristic(&device_name, characteristic_id)
+            .unsubscribe_from_characteristic(&device_id, characteristic_id)
             .await;
         if result.is_ok() {
             if let Some(abort_sender) = self
                 .notification_aborts
-                .remove(&(device_name, characteristic_id))
+                .remove(&(device_id, characteristic_id))
             {
                 let _ = abort_sender.send(());
             }
@@ -372,7 +374,7 @@ impl ConnectionActor {
     pub(crate) fn notification_stream(
         &self,
         mut notification_stream: NotificationStream,
-        device_name: String,
+        device_id: String,
         characteristic_id: Uuid,
     ) -> oneshot::Sender<()> {
         let (abort_sender, abort_receiver) = oneshot::channel();
@@ -389,7 +391,7 @@ impl ConnectionActor {
                     },
                     notification = notification_stream.next() => {
                         if let Some(value) = notification {
-                            if let Err(err) = tx.send(ConnectionMessage::CharacteristicNotification{device_name: device_name.clone(), characteristic_id, value: value.value}) {
+                            if let Err(err) = tx.send(ConnectionMessage::CharacteristicNotification{device_id: device_id.clone(), characteristic_id, value: value.value}) {
                                 error!("Failed to send notification: {:?}", err);
                             }
                         } else {

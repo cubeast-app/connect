@@ -7,26 +7,26 @@ pub enum Request {
     StartDiscovery,
     StopDiscovery,
     Connect {
-        name: String,
+        device_id: String,
     },
     Disconnect {
-        name: String,
+        device_id: String,
     },
     ReadCharacteristic {
-        device_name: String,
+        device_id: String,
         characteristic_id: Uuid,
     },
     WriteCharacteristic {
-        device_name: String,
+        device_id: String,
         characteristic_id: Uuid,
         value: Vec<u8>,
     },
     SubscribeToCharacteristic {
-        device_name: String,
+        device_id: String,
         characteristic_id: Uuid,
     },
     UnsubscribeFromCharacteristic {
-        device_name: String,
+        device_id: String,
         characteristic_id: Uuid,
     },
     Version,
