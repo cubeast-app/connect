@@ -2,41 +2,55 @@
   <div class="header">
     <mat-slide-toggle (change)="showOnlyCubingDevices($event.checked)" [disabled]="false" checked="true">Show only
       recognized cubing devices</mat-slide-toggle>
-    <mat-spinner diameter="20"></mat-spinner>
+    @if (isScanning) {
+      <mat-spinner diameter="20"></mat-spinner>
+    } @else {
+      <button mat-flat-button (click)="reScan()">Re-scan</button>
+    }
   </div>
-  @if (shownDevices | ngrxPush; as devices) {
-  <table mat-table [dataSource]="shownDevices" [trackBy]="trackBy">
-    <ng-container matColumnDef="name">
-      <th mat-header-cell *matHeaderCellDef>Name</th>
-      <td mat-cell *matCellDef="let device"> {{ device.name }} </td>
-    </ng-container>
-    <ng-container matColumnDef="address">
-      <th mat-header-cell *matHeaderCellDef>Address</th>
-      <td mat-cell *matCellDef="let device"> {{ device.address }} </td>
-    </ng-container>
-    <ng-container matColumnDef="encryption_key">
-      <th mat-header-cell *matHeaderCellDef>Encryption key</th>
-      <td mat-cell *matCellDef="let device">
-        @if (encryptionKey(device); as key) {
-        <div class="encryption-key-container">
-          <div class="key">{{ key }}</div>
-          <button mat-mini-fab (click)="copyToClipboard(key)">
-            <mat-icon>content_copy</mat-icon>
+  <ng-container *ngrxLet="shownDevices; let devices">
+    @if (devices.length > 0) {
+    <table mat-table [dataSource]="devices" [trackBy]="trackBy">
+      <ng-container matColumnDef="name">
+        <th mat-header-cell *matHeaderCellDef>Name</th>
+        <td mat-cell *matCellDef="let device"> {{ device.name || '-' }} </td>
+      </ng-container>
+      <ng-container matColumnDef="address">
+        <th mat-header-cell *matHeaderCellDef>Address</th>
+        <td mat-cell *matCellDef="let device"> {{ device.address || '-' }} </td>
+      </ng-container>
+      <ng-container matColumnDef="encryption_key">
+        <th mat-header-cell *matHeaderCellDef>Encryption key</th>
+        <td mat-cell *matCellDef="let device">
+          @if (encryptionKey(device); as key) {
+          <div class="encryption-key-container">
+            <div class="key">{{ key }}</div>
+            <button mat-mini-fab (click)="copyToClipboard(key)">
+              <mat-icon>content_copy</mat-icon>
+            </button>
+          </div>
+          } @else {
+          -
+          }
+        </td>
+      </ng-container>
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef></th>
+        <td mat-cell *matCellDef="let device">
+          <button mat-flat-button (click)="details(device)">
+            Details
           </button>
-        </div>
-        } @else {
-        -
-        }
-      </td>
-    </ng-container>
-    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-    <tr mat-row *matRowDef="let myRowData; columns: displayedColumns"></tr>
-  </table>
-  } @else {
-  <div class="no-devices">
-    No devices found yet...
-  </div>
-  }
+        </td>
+      </ng-container>
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let myRowData; columns: displayedColumns"></tr>
+    </table>
+    } @else {
+    <div class="no-devices">
+      No devices found yet...
+    </div>
+    }
+  </ng-container>
 
 
 </div>

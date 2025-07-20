@@ -1,14 +1,14 @@
-use std::thread;
+use std::{thread, time::Duration};
 
 use futures_util::StreamExt;
-use log::{error, trace};
+use log::{error, info, trace};
 use tauri::{
-    async_runtime::block_on, AppHandle, CustomMenuItem, GlobalWindowEvent, Manager as _, State,
-    SystemTray, SystemTrayEvent, SystemTrayMenu, Wry,
+    api::shell::open, async_runtime::block_on, AppHandle, CustomMenuItem, GlobalWindowEvent,
+    Manager as _, State, SystemTray, SystemTrayEvent, SystemTrayMenu, Wry,
 };
 use tauri_plugin_autostart::MacosLauncher;
 
-use crate::bluetooth::Bluetooth;
+use crate::bluetooth::{device_data::DeviceData, Bluetooth};
 
 struct Context {
     bluetooth: Bluetooth,
@@ -48,9 +48,35 @@ async fn stop_discovery(context: State<'_, Context>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn device_details(
+    context: State<'_, Context>,
+    device_id: String,
+) -> Result<DeviceData, String> {
+    info!("Fetching details for device: {}", device_id);
+    let connection_future = context.bluetooth.connect(&device_id);
+
+    let timeout = Duration::from_secs(15);
+    let device_data = tokio::time::timeout(timeout, connection_future)
+        .await
+        .map_err(|err| err.to_string())?
+        .map_err(|err| err.to_string())?;
+
+    context
+        .bluetooth
+        .disconnect(&device_id)
+        .await
+        .map_err(|err| err.to_string())?;
+
+    info!("Device data: {:?}", device_data);
+
+    Ok(device_data)
+}
+
 pub fn build_tauri(bluetooth: Bluetooth) -> tauri::Builder<Wry> {
     let tray_menu = SystemTrayMenu::new()
         .add_item(CustomMenuItem::new("open", "Open"))
+        .add_item(CustomMenuItem::new("cubeast", "Go to Cubeast"))
         .add_item(CustomMenuItem::new("exit", "Exit"));
 
     let tray = SystemTray::new().with_menu(tray_menu);
@@ -62,7 +88,11 @@ pub fn build_tauri(bluetooth: Bluetooth) -> tauri::Builder<Wry> {
         ))
         .manage(Context { bluetooth })
         .system_tray(tray)
-        .invoke_handler(tauri::generate_handler![start_discovery, stop_discovery])
+        .invoke_handler(tauri::generate_handler![
+            start_discovery,
+            stop_discovery,
+            device_details
+        ])
         .on_system_tray_event(handle_system_tray_event)
         .on_window_event(handle_window_event)
 }
@@ -85,6 +115,11 @@ fn handle_system_tray_event(app: &AppHandle<Wry>, event: SystemTrayEvent) {
                 window.show().unwrap();
                 window.unminimize().unwrap();
                 window.set_focus().unwrap();
+            }
+            "cubeast" => {
+                if let Err(err) = open(&app.shell_scope(), "https://app.cubeast.com", None) {
+                    error!("Failed to open Cubeast: {}", err);
+                }
             }
             _ => {
                 error!("Unknown menu item: {}", id);

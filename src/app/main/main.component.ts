@@ -1,12 +1,11 @@
 import { ChangeDetectionStrategy, Component, ViewChild } from '@angular/core';
-import { MatSlideToggle, MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatButtonModule } from '@angular/material/button';
+import { MatSlideToggle, MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { invoke } from '@tauri-apps/api';
 import { getVersion } from '@tauri-apps/api/app';
-import { TauriEvent } from '@tauri-apps/api/event';
 import { WebviewWindow } from '@tauri-apps/api/window';
 import { Observable, from } from 'rxjs';
-import { isEnabled, enable, disable } from 'tauri-plugin-autostart-api';
+import { disable, enable, isEnabled } from 'tauri-plugin-autostart-api';
 
 @Component({
   selector: 'app-main',
@@ -57,23 +56,9 @@ export class MainComponent {
       this.discoverWebview.listen('tauri://error', function (e) {
         console.error(e);
       });
-
-      this.discoverWebview.listen(TauriEvent.WINDOW_CLOSE_REQUESTED, () => {
-        this.stopDiscovery().catch(console.error);
-      });
     }
 
     this.discoverWebview.show();
-
-    this.startDiscovery().catch(console.error);
-  }
-
-  private async startDiscovery(): Promise<void> {
-    return invoke("start_discovery");
-  }
-
-  private async stopDiscovery(): Promise<void> {
-    return invoke("stop_discovery");
   }
 
   help(): void {

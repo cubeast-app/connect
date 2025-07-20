@@ -82,19 +82,19 @@ impl Bluetooth {
             .expect("Failed to send message to Bluetooth actor");
     }
 
-    pub async fn connect(&self, name: String) -> Result<DeviceData, Error> {
+    pub async fn connect(&self, device_id: &str) -> Result<DeviceData, Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
-            .send(BluetoothMessage::Connect(name, tx))
+            .send(BluetoothMessage::Connect(device_id.to_string(), tx))
             .expect("Failed to send message to Bluetooth actor");
 
         rx.await.expect("Failed to receive connect response")
     }
 
-    pub async fn disconnect(&self, name: String) -> Result<(), Error> {
+    pub async fn disconnect(&self, device_id: &str) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
-            .send(BluetoothMessage::Disconnect(name, tx))
+            .send(BluetoothMessage::Disconnect(device_id.to_string(), tx))
             .expect("Failed to send message to Bluetooth actor");
 
         rx.await.expect("Failed to receive disconnect response")
@@ -102,13 +102,13 @@ impl Bluetooth {
 
     pub async fn read_characteristic(
         &self,
-        device_name: String,
+        device_id: &str,
         characteristic_id: Uuid,
     ) -> Result<Vec<u8>, Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
             .send(BluetoothMessage::ReadCharacteristic(
-                device_name,
+                device_id.to_string(),
                 characteristic_id,
                 tx,
             ))
@@ -119,14 +119,14 @@ impl Bluetooth {
 
     pub async fn write_characteristic(
         &self,
-        device_name: String,
+        device_id: &str,
         characteristic_id: Uuid,
         value: Vec<u8>,
     ) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
             .send(BluetoothMessage::WriteCharacteristic(
-                device_name,
+                device_id.to_string(),
                 characteristic_id,
                 value,
                 tx,
@@ -139,13 +139,13 @@ impl Bluetooth {
 
     pub async fn subscribe_to_characteristic(
         &self,
-        device_name: String,
+        device_id: &str,
         characteristic_id: Uuid,
     ) -> Result<NotificationStream, Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
             .send(BluetoothMessage::SubscribeToCharacteristic(
-                device_name,
+                device_id.to_string(),
                 characteristic_id,
                 tx,
             ))
@@ -156,13 +156,13 @@ impl Bluetooth {
 
     pub async fn unsubscribe_from_characteristic(
         &self,
-        device_name: String,
+        device_id: &str,
         characteristic_id: Uuid,
     ) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
         self.tx
             .send(BluetoothMessage::UnsubscribeFromCharacteristic(
-                device_name,
+                device_id.to_string(),
                 characteristic_id,
                 tx,
             ))
@@ -207,28 +207,26 @@ impl BluetoothActor {
                         error!("Failed to send disconnect result: {:?}", err);
                     }
                 }
-                BluetoothMessage::ReadCharacteristic(device_name, uuid, sender) => {
-                    let result = self.read_characteristic(device_name, uuid).await;
+                BluetoothMessage::ReadCharacteristic(device_id, uuid, sender) => {
+                    let result = self.read_characteristic(device_id, uuid).await;
                     if sender.send(result).is_err() {
                         error!("Failed to send read characteristic result");
                     }
                 }
-                BluetoothMessage::WriteCharacteristic(device_name, uuid, value, sender) => {
-                    let result = self.write_characteristic(device_name, uuid, value).await;
+                BluetoothMessage::WriteCharacteristic(device_id, uuid, value, sender) => {
+                    let result = self.write_characteristic(device_id, uuid, value).await;
                     if sender.send(result).is_err() {
                         error!("Failed to send write characteristic result");
                     }
                 }
-                BluetoothMessage::SubscribeToCharacteristic(device_name, uuid, sender) => {
-                    let result = self.subscribe_to_characteristic(device_name, uuid).await;
+                BluetoothMessage::SubscribeToCharacteristic(device_id, uuid, sender) => {
+                    let result = self.subscribe_to_characteristic(device_id, uuid).await;
                     if sender.send(result).is_err() {
                         error!("Failed to send subscribe to characteristic result");
                     }
                 }
-                BluetoothMessage::UnsubscribeFromCharacteristic(device_name, uuid, sender) => {
-                    let result = self
-                        .unsubscribe_from_characteristic(device_name, uuid)
-                        .await;
+                BluetoothMessage::UnsubscribeFromCharacteristic(device_id, uuid, sender) => {
+                    let result = self.unsubscribe_from_characteristic(device_id, uuid).await;
                     if sender.send(result).is_err() {
                         error!("Failed to send unsubscribe from characteristic result");
                     }
@@ -237,9 +235,9 @@ impl BluetoothActor {
         }
     }
 
-    async fn connect(&mut self, device_name: String) -> Result<DeviceData, Error> {
-        if let Some(device) = self.connected_devices.get_mut(&device_name) {
-            info!("Reusing existing connection to {}", device_name);
+    async fn connect(&mut self, device_id: String) -> Result<DeviceData, Error> {
+        if let Some(device) = self.connected_devices.get_mut(&device_id) {
+            info!("Reusing existing connection to {}", device_id);
 
             device.add_client();
 
@@ -249,41 +247,36 @@ impl BluetoothActor {
         let peripherals = self.adapter.peripherals().await?;
 
         for peripheral in peripherals {
-            let properties = peripheral.properties().await?;
-            if let Some(properties) = properties {
-                if let Some(name) = properties.local_name {
-                    if name == device_name {
-                        info!("Found device: {}", device_name);
+            if device_id == peripheral.id().to_string() {
+                info!("Found device: {}", device_id);
 
-                        // Connect to the peripheral
-                        peripheral.connect().await?;
-                        info!("Connected to {}", device_name);
+                // Connect to the peripheral
+                peripheral.connect().await?;
+                info!("Connected to {}", device_id);
 
-                        let mut connected_device =
-                            ConnectedDevice::start(peripheral.clone(), device_name.clone()).await?;
+                let mut connected_device =
+                    ConnectedDevice::start(peripheral.clone(), device_id.clone()).await?;
 
-                        connected_device.add_client();
+                connected_device.add_client();
 
-                        let device_data: DeviceData = (&connected_device).into();
+                let device_data: DeviceData = (&connected_device).into();
 
-                        self.connected_devices.insert(device_name, connected_device);
+                self.connected_devices.insert(device_id, connected_device);
 
-                        return Ok(device_data);
-                    }
-                }
+                return Ok(device_data);
             }
         }
 
         Err(Error::DeviceNotFound)
     }
 
-    async fn disconnect(&mut self, name: String) -> Result<(), Error> {
-        if let Some(device) = self.connected_devices.get_mut(&name) {
+    async fn disconnect(&mut self, device_id: String) -> Result<(), Error> {
+        if let Some(device) = self.connected_devices.get_mut(&device_id) {
             device.remove_client();
 
             if device.has_no_clients() {
-                let device = self.connected_devices.remove(&name);
-                info!("Disconnected from {}", name);
+                let device = self.connected_devices.remove(&device_id);
+                info!("Disconnected from {}", device_id);
 
                 let device = device.unwrap();
                 device.notifications.stop().await;
@@ -292,7 +285,7 @@ impl BluetoothActor {
                 Ok(())
             }
         } else {
-            error!("No connected device found with ID: {}", name);
+            error!("No connected device found with ID: {}", device_id);
 
             Err(Error::DeviceNotFound)
         }
@@ -300,12 +293,12 @@ impl BluetoothActor {
 
     async fn characteristic(
         &self,
-        device_name: String,
+        device_id: String,
         uuid: Uuid,
     ) -> Result<(PlatformPeripheral, Characteristic), Error> {
         let peripheral = self
             .connected_devices
-            .get(&device_name)
+            .get(&device_id)
             .ok_or(Error::DeviceNotFound)?
             .peripheral
             .clone();
@@ -319,18 +312,18 @@ impl BluetoothActor {
         Ok((peripheral, characteristic))
     }
 
-    async fn read_characteristic(&self, device_name: String, uuid: Uuid) -> Result<Vec<u8>, Error> {
-        let (peripheral, characteristic) = self.characteristic(device_name, uuid).await?;
+    async fn read_characteristic(&self, device_id: String, uuid: Uuid) -> Result<Vec<u8>, Error> {
+        let (peripheral, characteristic) = self.characteristic(device_id, uuid).await?;
         peripheral.read(&characteristic).await
     }
 
     async fn write_characteristic(
         &self,
-        device_name: String,
+        device_id: String,
         uuid: Uuid,
         value: Vec<u8>,
     ) -> Result<(), Error> {
-        let (peripheral, characteristic) = self.characteristic(device_name, uuid).await?;
+        let (peripheral, characteristic) = self.characteristic(device_id, uuid).await?;
         peripheral
             .write(
                 &characteristic,
@@ -342,12 +335,12 @@ impl BluetoothActor {
 
     async fn subscribe_to_characteristic(
         &mut self,
-        device_name: String,
+        device_id: String,
         uuid: Uuid,
     ) -> Result<NotificationStream, Error> {
         let device = self
             .connected_devices
-            .get_mut(&device_name)
+            .get_mut(&device_id)
             .ok_or(Error::DeviceNotFound)?;
 
         let notification_stream = device.notifications.subscribe(uuid).await?;
@@ -357,12 +350,12 @@ impl BluetoothActor {
 
     async fn unsubscribe_from_characteristic(
         &mut self,
-        device_name: String,
+        device_id: String,
         uuid: Uuid,
     ) -> Result<(), Error> {
         let device = self
             .connected_devices
-            .get_mut(&device_name)
+            .get_mut(&device_id)
             .ok_or(Error::DeviceNotFound)?;
 
         device.notifications.unsubscribe(uuid).await
