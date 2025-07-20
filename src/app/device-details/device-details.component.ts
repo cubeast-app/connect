@@ -3,10 +3,10 @@ import { DeviceData } from './device-data';
 import { CommonModule } from '@angular/common';
 import { invoke } from '@tauri-apps/api';
 import { ActivatedRoute } from '@angular/router';
-import { BehaviorSubject, first } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { writeText } from '@tauri-apps/api/clipboard';
-import { LetDirective, PushPipe } from '@ngrx/component';
+import { LetDirective } from '@ngrx/component';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatButtonModule } from '@angular/material/button';
 
@@ -23,8 +23,6 @@ export class DeviceDetailsComponent implements OnInit {
   constructor(private route: ActivatedRoute, private snackBar: MatSnackBar) { }
 
   ngOnInit(): void {
-    console.log('DeviceDetailsComponent initialized');
-
     this.tryAgain();
   }
 
@@ -50,7 +48,6 @@ export class DeviceDetailsComponent implements OnInit {
         horizontalPosition: 'right',
         verticalPosition: 'top'
       });
-      console.log('Device details copied to clipboard');
     }).catch(err => {
       console.error('Failed to copy device details:', err);
     });

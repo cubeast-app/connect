@@ -47,7 +47,7 @@ export class DiscoveryComponent {
     });
 
     // only emit values if they are distinct from the previous value, use a deep comparison of the array elements
-    const distinctDiscoveredDevices = this.discoveredDevices.pipe(distinctUntilChanged((a, b) => a.map(device => device.id) === b.map(device => device.id)));
+    const distinctDiscoveredDevices = this.discoveredDevices.pipe(distinctUntilChanged((a, b) => a.map(device => device.id).join(',') === b.map(device => device.id).join(',')));
     // emit new array at most once per second
     const throttled = distinctDiscoveredDevices.pipe(sample(interval(1000)));
 
@@ -128,7 +128,6 @@ export class DiscoveryComponent {
   }
 
   reScan(): void {
-    this.isScanning.next(false);
     this.discoveredDevices.next([]);
 
     this.startDiscovery().catch(() => {
