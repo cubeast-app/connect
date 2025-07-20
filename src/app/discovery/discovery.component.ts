@@ -3,9 +3,9 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
 import { MatTableModule } from '@angular/material/table';
-import { LetDirective, PushPipe } from '@ngrx/component';
+import { LetDirective } from '@ngrx/component';
 import { writeText } from '@tauri-apps/api/clipboard';
-import { listen, TauriEvent } from '@tauri-apps/api/event';
+import { listen } from '@tauri-apps/api/event';
 import { BehaviorSubject, combineLatest, distinctUntilChanged, interval, map, Observable, sample } from 'rxjs';
 import { DiscoveredDevice } from './discovered-device';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -17,7 +17,6 @@ type DiscoveredDevicesFilter = (devices: DiscoveredDevice[]) => DiscoveredDevice
 
 const NoFilter: DiscoveredDevicesFilter = devices => devices;
 const CubingPrefixes = ['GAN', 'MG', 'AiCube', 'Gi', 'Mi Smart Magic Cube', 'GoCube', 'Rubiks', 'MHC', 'WCU'];
-const DefaultName = 'Unnamed Device';
 const CubingDeviceFilter: DiscoveredDevicesFilter = devices => devices.filter(isCubingDevice);
 const ScanTimeout = 30000;
 
@@ -29,7 +28,7 @@ function isCubingDevice(device: DiscoveredDevice): boolean {
   selector: 'app-discovery',
   templateUrl: './discovery.component.html',
   styleUrls: ['./discovery.component.css'],
-  imports: [MatTableModule, MatSlideToggle, MatProgressSpinner, MatIcon, MatSnackBarModule, LetDirective, MatButtonModule ],
+  imports: [MatTableModule, MatSlideToggle, MatProgressSpinner, MatIcon, MatSnackBarModule, LetDirective, MatButtonModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true
 })
@@ -38,8 +37,7 @@ export class DiscoveryComponent {
   shownDevices!: Observable<DiscoveredDevice[]>;
   displayedColumns = ['name', 'address', 'encryption_key', 'actions'];
   discoveredDevicesFilter = new BehaviorSubject(CubingDeviceFilter);
-  detailsWebview: WebviewWindow | undefined;
-  isScanning = false;
+  isScanning = new BehaviorSubject<boolean>(false);
 
   constructor(private snackBar: MatSnackBar) { }
 
@@ -49,7 +47,7 @@ export class DiscoveryComponent {
     });
 
     // only emit values if they are distinct from the previous value, use a deep comparison of the array elements
-    const distinctDiscoveredDevices = this.discoveredDevices.pipe(distinctUntilChanged((a, b) => JSON.stringify(a) === JSON.stringify(b)));
+    const distinctDiscoveredDevices = this.discoveredDevices.pipe(distinctUntilChanged((a, b) => a.map(device => device.id) === b.map(device => device.id)));
     // emit new array at most once per second
     const throttled = distinctDiscoveredDevices.pipe(sample(interval(1000)));
 
@@ -57,19 +55,18 @@ export class DiscoveryComponent {
       const namedOrAddressed = devices.filter(device => device.name !== undefined || device.address !== undefined);
       const filtered = filter(namedOrAddressed);
 
-      // if devices have no name, set it to DefaultName
-      const named = filtered.map(device => {
-        device.name = device.name ?? DefaultName;
-        return device;
-      });
-
-      // sort by name, or if names are equal, by address if address is defined
-      return named.sort((a, b) => {
-        if (a.name === b.name) {
-          return a.address === undefined ? 1 : b.address === undefined ? -1 : a.address.localeCompare(b.address);
-        } else {
+      // sort by name, or if names are equal, unnamed devices should be after named devices, use address or id if empty name
+      return filtered.sort((a, b) => {
+        if (a.name && b.name) {
           return a.name!.localeCompare(b.name!);
+        } else if (a.name && !b.name) {
+          return -1;
         }
+        else if (!a.name && b.name) {
+          return 1;
+        }
+
+        return a.id.localeCompare(b.id);
       });
     }));
 
@@ -111,29 +108,27 @@ export class DiscoveryComponent {
   }
 
   details(device: DiscoveredDevice): void {
-    if (this.detailsWebview === undefined) {
-      this.detailsWebview = new WebviewWindow('device-details', {
-        title: 'Device Details',
-        url: '/device-details/' + device.name,
-        width: 600,
-        height: 400,
-        center: true
-      });
+    const detailsWebview = new WebviewWindow('device-details-' + device.id, {
+      title: 'Device details',
+      url: '/device-details/' + encodeURIComponent(device.id),
+      width: 600,
+      height: 400,
+      center: true
+    });
 
-      this.detailsWebview.listen('tauri://error', function (e) {
-        console.error(e);
-      });
-    }
+    detailsWebview.listen('tauri://error', function (e) {
+      console.error(e);
+    });
 
-    this.detailsWebview.show();
+    detailsWebview.show();
   }
 
   trackBy(index: number, device: DiscoveredDevice): string {
-    return device.address ?? device.name ?? index.toString();
+    return device.id;
   }
 
   reScan(): void {
-    this.isScanning = false;
+    this.isScanning.next(false);
     this.discoveredDevices.next([]);
 
     this.startDiscovery().catch(() => {
@@ -148,7 +143,7 @@ export class DiscoveryComponent {
   private async startDiscovery(): Promise<void> {
     await invoke("start_discovery");
 
-    this.isScanning = true;
+    this.isScanning.next(true);
 
     setTimeout(() => {
       this.stopDiscovery().catch(console.error);
@@ -156,7 +151,7 @@ export class DiscoveryComponent {
   }
 
   private async stopDiscovery(): Promise<void> {
-    this.isScanning = false;
+    this.isScanning.next(false);
     return invoke("stop_discovery");
   }
 }

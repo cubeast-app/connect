@@ -1,5 +1,4 @@
 import { Component, OnInit } from '@angular/core';
-import { listen } from '@tauri-apps/api/event';
 import { DeviceData } from './device-data';
 import { CommonModule } from '@angular/common';
 import { invoke } from '@tauri-apps/api';
@@ -31,9 +30,9 @@ export class DeviceDetailsComponent implements OnInit {
 
   tryAgain(): void {
     this.deviceDetails.next(undefined);
-    const deviceName = this.route.snapshot.paramMap.get('device_name');
-    if (deviceName) {
-      invoke<DeviceData>('device_details', { deviceName }).then(data => {
+    const deviceId = this.route.snapshot.paramMap.get('device_id');
+    if (deviceId) {
+      invoke<DeviceData>('device_details', { deviceId }).then(data => {
         this.deviceDetails.next(data);
       }).catch(error => {
         console.error('Error fetching device details:', error);
@@ -43,20 +42,17 @@ export class DeviceDetailsComponent implements OnInit {
   }
 
   copyToClipboard(): void {
-    this.deviceDetails.pipe(first()).subscribe(device => {
-      if (device) {
-        const deviceInfo = JSON.stringify(device, null, 2);
-        writeText(deviceInfo).then(() => {
-          this.snackBar.open(`Copied to clipboard`, undefined, {
-            duration: 2000,
-            horizontalPosition: 'right',
-            verticalPosition: 'top'
-          });
-          console.log('Device details copied to clipboard');
-        }).catch(err => {
-          console.error('Failed to copy device details:', err);
-        });
-      }
+    const deviceInfo = JSON.stringify(this.deviceDetails.value, null, 2);
+
+    writeText(deviceInfo).then(() => {
+      this.snackBar.open(`Copied to clipboard`, undefined, {
+        duration: 2000,
+        horizontalPosition: 'right',
+        verticalPosition: 'top'
+      });
+      console.log('Device details copied to clipboard');
+    }).catch(err => {
+      console.error('Failed to copy device details:', err);
     });
   }
 }

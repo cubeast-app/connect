@@ -13,11 +13,11 @@
     <table mat-table [dataSource]="devices" [trackBy]="trackBy">
       <ng-container matColumnDef="name">
         <th mat-header-cell *matHeaderCellDef>Name</th>
-        <td mat-cell *matCellDef="let device"> {{ device.name }} </td>
+        <td mat-cell *matCellDef="let device"> {{ device.name || '-' }} </td>
       </ng-container>
       <ng-container matColumnDef="address">
         <th mat-header-cell *matHeaderCellDef>Address</th>
-        <td mat-cell *matCellDef="let device"> {{ device.address }} </td>
+        <td mat-cell *matCellDef="let device"> {{ device.address || '-' }} </td>
       </ng-container>
       <ng-container matColumnDef="encryption_key">
         <th mat-header-cell *matHeaderCellDef>Encryption key</th>

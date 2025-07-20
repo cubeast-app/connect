@@ -51,10 +51,10 @@ async fn stop_discovery(context: State<'_, Context>) -> Result<(), String> {
 #[tauri::command]
 async fn device_details(
     context: State<'_, Context>,
-    device_name: String,
+    device_id: String,
 ) -> Result<DeviceData, String> {
-    info!("Fetching details for device: {}", device_name);
-    let connection_future = context.bluetooth.connect(&device_name);
+    info!("Fetching details for device: {}", device_id);
+    let connection_future = context.bluetooth.connect(&device_id);
 
     let timeout = Duration::from_secs(15);
     let device_data = tokio::time::timeout(timeout, connection_future)
@@ -64,7 +64,7 @@ async fn device_details(
 
     context
         .bluetooth
-        .disconnect(&device_name)
+        .disconnect(&device_id)
         .await
         .map_err(|err| err.to_string())?;
 
