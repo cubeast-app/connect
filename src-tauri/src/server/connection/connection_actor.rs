@@ -16,7 +16,6 @@ use uuid::Uuid;
 
 use crate::server::message::broadcast::Broadcast;
 use crate::server::message::response::Response;
-use crate::version::VERSION;
 use crate::{
     bluetooth::notifications::notification_stream::NotificationStream,
     server::message::request::Request,
@@ -214,7 +213,9 @@ impl ConnectionActor {
                     .await
             }
 
-            Request::Version => Response::Version { version: VERSION },
+            Request::Version => Response::Version {
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            },
         }
     }
 

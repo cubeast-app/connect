@@ -17,7 +17,6 @@
 mod bluetooth;
 mod server;
 mod ui;
-mod version;
 
 use bluetooth::Bluetooth;
 use server::Server;

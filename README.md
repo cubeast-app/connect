@@ -17,7 +17,7 @@ Currently the app exposes a Websocket API on port 17430. Example of an exchange:
 
 ```
 -> {"type":"request", "id":"1", "request": {"type":"version"}}
-<- {"type":"response", "id":"1", "response": {"result":"version", "version":1}}
+<- {"type":"response", "id":"1", "response": {"result":"version", "version": "1.0.0"}}
 -> {"type":"request", "id":"2", "request":{"type":"start-discovery"}}
 <- {"type":"response","id":"2","response":{"result":"ok"}}
 <- {"type": "discovered-devices","devices": [{

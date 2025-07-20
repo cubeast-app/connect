@@ -8,7 +8,7 @@ pub enum Response {
     Ok,
     Error { error: String },
     Value { value: Vec<u8> },
-    Version { version: u16 },
+    Version { version: String },
     Connected { device: DeviceData },
 }
 
