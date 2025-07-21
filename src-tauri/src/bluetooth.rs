@@ -24,6 +24,7 @@ pub mod connected_device;
 pub mod device_data;
 pub mod discovery;
 pub mod notifications;
+mod timestamp;
 
 enum BluetoothMessage {
     SubscribeToDiscovery(oneshot::Sender<Result<DiscoveryStream, Error>>),
@@ -397,7 +398,7 @@ impl BluetoothActor {
         let value = peripheral.read(&characteristic).await?;
 
         Ok(CharacteristicValue {
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: timestamp::timestamp(),
             value,
         })
     }

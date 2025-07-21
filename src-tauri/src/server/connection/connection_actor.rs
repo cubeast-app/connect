@@ -399,8 +399,11 @@ impl ConnectionActor {
                     notification = notification_stream.next() => {
                         if let Some(value) = notification {
                             let timestamp = chrono::Utc::now().timestamp_millis() as u64;
-                            if let Err(err) = tx.send(ConnectionMessage::CharacteristicNotification{
-                                device_id: device_id.clone(), characteristic_id, value: CharacteristicValue { timestamp, value: value.value }}) {
+                            if let Err(err) = tx.send(ConnectionMessage::CharacteristicNotification {
+                                device_id: device_id.clone(),
+                                characteristic_id,
+                                value: CharacteristicValue { timestamp, value: value.value },
+                            }) {
                                 error!("Failed to send notification: {:?}", err);
                             }
                         } else {
