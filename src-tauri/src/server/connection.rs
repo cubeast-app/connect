@@ -1,19 +1,14 @@
 use futures_util::stream::{SplitSink, SplitStream};
-use tokio::{
-    net::TcpStream,
-    sync::mpsc::{unbounded_channel, UnboundedSender},
-};
+use tokio::{net::TcpStream, sync::mpsc::unbounded_channel};
 use tokio_tungstenite::{tungstenite::Message as TungsteniteMessage, WebSocketStream};
 
 use crate::bluetooth::Bluetooth;
 
-use self::connection_actor::{ConnectionActor, ConnectionMessage};
+use self::connection_actor::ConnectionActor;
 
 mod connection_actor;
 
-pub(crate) struct Connection {
-    tx: UnboundedSender<ConnectionMessage>,
-}
+pub(crate) struct Connection {}
 
 impl Connection {
     pub(crate) fn start(
@@ -29,10 +24,10 @@ impl Connection {
             actor.run(rx).await;
         });
 
-        Self::new(tx)
+        Self::new()
     }
 
-    fn new(tx: UnboundedSender<ConnectionMessage>) -> Self {
-        Self { tx }
+    fn new() -> Self {
+        Self {}
     }
 }

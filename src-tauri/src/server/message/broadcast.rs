@@ -12,6 +12,7 @@ pub enum Broadcast {
         devices: Vec<DiscoveredDevice>,
     },
     CharacteristicValue {
+        timestamp: u64,
         device_id: String,
         characteristic_id: Uuid,
         value: Vec<u8>,

@@ -7,7 +7,7 @@ use crate::bluetooth::device_data::DeviceData;
 pub enum Response {
     Ok,
     Error { error: String },
-    Value { value: Vec<u8> },
+    Value { timestamp: u64, value: Vec<u8> },
     Version { version: String },
     Connected { device: DeviceData },
 }
