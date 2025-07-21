@@ -14,8 +14,10 @@ use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::{self, tungstenite::Message as TungsteniteMessage};
 use uuid::Uuid;
 
-use crate::server::message::broadcast::Broadcast;
 use crate::server::message::response::Response;
+use crate::{
+    bluetooth::characteristic_value::CharacteristicValue, server::message::broadcast::Broadcast,
+};
 use crate::{
     bluetooth::notifications::notification_stream::NotificationStream,
     server::message::request::Request,
@@ -37,7 +39,7 @@ pub(super) enum ConnectionMessage {
     CharacteristicNotification {
         device_id: String,
         characteristic_id: Uuid,
-        value: Vec<u8>,
+        value: CharacteristicValue,
     },
 }
 
@@ -135,12 +137,13 @@ impl ConnectionActor {
         &mut self,
         device_id: String,
         characteristic_id: Uuid,
-        value: Vec<u8>,
+        value: CharacteristicValue,
     ) {
         let broadcast = Broadcast::CharacteristicValue {
             device_id,
             characteristic_id,
-            value,
+            value: value.value,
+            timestamp: value.timestamp,
         };
 
         let serialized = serde_json::to_string(&broadcast).unwrap();
@@ -184,7 +187,10 @@ impl ConnectionActor {
                     .await;
 
                 match result {
-                    Ok(value) => Response::Value { value },
+                    Ok(value) => Response::Value {
+                        value: value.value,
+                        timestamp: value.timestamp,
+                    },
                     Err(error) => Response::Error {
                         error: format!("Failed to read characteristic: {error:?}"),
                     },
@@ -392,7 +398,9 @@ impl ConnectionActor {
                     },
                     notification = notification_stream.next() => {
                         if let Some(value) = notification {
-                            if let Err(err) = tx.send(ConnectionMessage::CharacteristicNotification{device_id: device_id.clone(), characteristic_id, value: value.value}) {
+                            let timestamp = chrono::Utc::now().timestamp_millis() as u64;
+                            if let Err(err) = tx.send(ConnectionMessage::CharacteristicNotification{
+                                device_id: device_id.clone(), characteristic_id, value: CharacteristicValue { timestamp, value: value.value }}) {
                                 error!("Failed to send notification: {:?}", err);
                             }
                         } else {
