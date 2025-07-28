@@ -4,14 +4,15 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
 import { MatTableModule } from '@angular/material/table';
 import { LetDirective } from '@ngrx/component';
-import { writeText } from '@tauri-apps/api/clipboard';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { listen } from '@tauri-apps/api/event';
-import { BehaviorSubject, combineLatest, distinctUntilChanged, interval, map, Observable, sample } from 'rxjs';
+import { BehaviorSubject, combineLatest, distinctUntilChanged, interval, map, Observable, sample, startWith } from 'rxjs';
 import { DiscoveredDevice } from './discovered-device';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { WebviewWindow } from '@tauri-apps/api/window';
-import { invoke } from '@tauri-apps/api';
+import { Router } from '@angular/router';
+import { invoke } from '@tauri-apps/api/core';
 import { MatButtonModule } from '@angular/material/button';
+import { CommonModule } from '@angular/common';
 
 type DiscoveredDevicesFilter = (devices: DiscoveredDevice[]) => DiscoveredDevice[];
 
@@ -28,7 +29,7 @@ function isCubingDevice(device: DiscoveredDevice): boolean {
   selector: 'app-discovery',
   templateUrl: './discovery.component.html',
   styleUrls: ['./discovery.component.css'],
-  imports: [MatTableModule, MatSlideToggle, MatProgressSpinner, MatIcon, MatSnackBarModule, LetDirective, MatButtonModule],
+  imports: [MatTableModule, MatSlideToggle, MatProgressSpinner, MatIcon, MatSnackBarModule, LetDirective, MatButtonModule, CommonModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true
 })
@@ -37,9 +38,9 @@ export class DiscoveryComponent {
   shownDevices!: Observable<DiscoveredDevice[]>;
   displayedColumns = ['name', 'address', 'encryption_key', 'actions'];
   discoveredDevicesFilter = new BehaviorSubject(CubingDeviceFilter);
-  isScanning = new BehaviorSubject<boolean>(false);
+  isScanning = new BehaviorSubject<boolean>(true);
 
-  constructor(private snackBar: MatSnackBar) { }
+  constructor(private snackBar: MatSnackBar, private router: Router) { }
 
   ngOnInit(): void {
     listen('discovery', devices => {
@@ -49,7 +50,7 @@ export class DiscoveryComponent {
     // only emit values if they are distinct from the previous value, use a deep comparison of the array elements
     const distinctDiscoveredDevices = this.discoveredDevices.pipe(distinctUntilChanged((a, b) => a.map(device => device.id).join(',') === b.map(device => device.id).join(',')));
     // emit new array at most once per second
-    const throttled = distinctDiscoveredDevices.pipe(sample(interval(1000)));
+    const throttled = distinctDiscoveredDevices.pipe(sample(interval(1000).pipe(startWith(0))));
 
     this.shownDevices = combineLatest([throttled, this.discoveredDevicesFilter]).pipe(map(([devices, filter]) => {
       const namedOrAddressed = devices.filter(device => device.name !== undefined || device.address !== undefined);
@@ -108,19 +109,11 @@ export class DiscoveryComponent {
   }
 
   details(device: DiscoveredDevice): void {
-    const detailsWebview = new WebviewWindow('device-details-' + device.id, {
-      title: 'Device details',
-      url: '/device-details/' + encodeURIComponent(device.id),
-      width: 600,
-      height: 400,
-      center: true
-    });
+    this.router.navigate(['/device-details', device.id]);
+  }
 
-    detailsWebview.listen('tauri://error', function (e) {
-      console.error(e);
-    });
-
-    detailsWebview.show();
+  goBack(): void {
+    this.router.navigate(['/']);
   }
 
   trackBy(index: number, device: DiscoveredDevice): string {

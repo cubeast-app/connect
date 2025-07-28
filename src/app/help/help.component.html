@@ -1,4 +1,7 @@
-<div>
+<div class="container">
+  <div class="header">
+    <button mat-flat-button (click)="goBack()">← Back</button>
+  </div>
   <mat-accordion>
 
     <mat-expansion-panel>
@@ -34,7 +37,7 @@
           Cubeast?</mat-panel-title>
       </mat-expansion-panel-header>
       <p>
-        Yes
+        Yes, without Connect running Cubeast will revert to using Web Bluetooth
       </p>
     </mat-expansion-panel>
 
@@ -47,6 +50,18 @@
         may be worse compared to using Cubeast Connect.
       </p>
     </mat-expansion-panel>
+
+    <mat-expansion-panel>
+      <mat-expansion-panel-header>
+        <mat-panel-title>How does Cubeast Connect work?</mat-panel-title>
+      </mat-expansion-panel-header>
+      <p>
+        Cubeast Connect runs as a native application on your computer. It uses native Bluetooth APIs to discover and
+        connect to Bluetooth devices. It then communicates with Cubeast through a WebSocket connection, allowing
+        Cubeast to send commands to the connected devices and receive data from them.
+      </p>
+    </mat-expansion-panel>
+
 
     <mat-expansion-panel>
       <mat-expansion-panel-header>

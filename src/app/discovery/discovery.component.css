@@ -1,32 +1,9 @@
-.container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 20px;
-  padding: 0;
+.header mat-slide-toggle {
+  flex-grow: 1;
 }
 
-mat-slide-toggle {
-  margin-bottom: 20px;
-}
-.mat-spinner {
-  margin-top: 20px;
-}
-
-.header {
-  width: 100%;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-
-  mat-slide-toggle {
-    flex-grow: 1;
-  }
-
-  mat-spinner {
-    flex-grow: 0;
-  }
+.header mat-spinner {
+  flex-grow: 0;
 }
 
 .encryption-key-container {
@@ -34,4 +11,9 @@ mat-slide-toggle {
   flex-direction: row;
   align-items: center;
   gap: 10px;
+}
+
+.no-devices {
+  font-size: 1.2em;
+  text-align: center;
 }

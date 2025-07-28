@@ -1,8 +1,9 @@
 <div class="container">
   <div class="header">
+    <button mat-flat-button (click)="goBack()">← Back</button>
     <mat-slide-toggle (change)="showOnlyCubingDevices($event.checked)" [disabled]="false" checked="true">Show only
       recognized cubing devices</mat-slide-toggle>
-    @if (isScanning) {
+    @if (isScanning | async) {
       <mat-spinner diameter="20"></mat-spinner>
     } @else {
       <button mat-flat-button (click)="reScan()">Re-scan</button>

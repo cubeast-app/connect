@@ -1,9 +1,9 @@
-import { ChangeDetectionStrategy, Component, ViewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, signal, ViewChild } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSlideToggle, MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
-import { WebviewWindow } from '@tauri-apps/api/window';
+import { Router } from '@angular/router';
 import { Observable, from } from 'rxjs';
 import { disable, enable, isEnabled } from 'tauri-plugin-autostart-api';
 
@@ -19,12 +19,12 @@ export class MainComponent {
   @ViewChild(MatSlideToggle)
   private timerComponent!: MatSlideToggle;
 
-  appVersion!: string;
-  discoverWebview: WebviewWindow | undefined;
-  helpWebview: WebviewWindow | undefined;
+  appVersion = signal<string | undefined>(undefined);
+
+  constructor(private router: Router) {}
 
   ngOnInit(): void {
-    getVersion().then(version => this.appVersion = version);
+    getVersion().then(version => this.appVersion.set(version));
     isEnabled().then(enabled => this.timerComponent.checked = enabled);
   }
 
@@ -44,38 +44,10 @@ export class MainComponent {
   }
 
   discover(): void {
-    if (this.discoverWebview === undefined) {
-      this.discoverWebview = new WebviewWindow('discovery', {
-        title: 'Discovery',
-        url: '/discovery',
-        width: 800,
-        height: 600,
-        center: true
-      });
-
-      this.discoverWebview.listen('tauri://error', function (e) {
-        console.error(e);
-      });
-    }
-
-    this.discoverWebview.show();
+    this.router.navigate(['/discovery']);
   }
 
   help(): void {
-    if (this.helpWebview === undefined) {
-      this.helpWebview = new WebviewWindow('help', {
-        title: 'Help',
-        url: '/help',
-        width: 800,
-        height: 600,
-        center: true
-      });
-
-      this.helpWebview.listen('tauri://error', function (e) {
-        console.error(e);
-      });
-    }
-
-    this.helpWebview.show();
+    this.router.navigate(['/help']);
   }
 }
