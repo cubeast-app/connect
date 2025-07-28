@@ -50,7 +50,7 @@ export class DiscoveryComponent {
     // only emit values if they are distinct from the previous value, use a deep comparison of the array elements
     const distinctDiscoveredDevices = this.discoveredDevices.pipe(distinctUntilChanged((a, b) => a.map(device => device.id).join(',') === b.map(device => device.id).join(',')));
     // emit new array at most once per second
-    const throttled = distinctDiscoveredDevices.pipe(sample(merge(of(0), interval(1000))));
+    const throttled = distinctDiscoveredDevices.pipe(sample(interval(1000).pipe(startWith(0))));
 
     this.shownDevices = combineLatest([throttled, this.discoveredDevicesFilter]).pipe(map(([devices, filter]) => {
       const namedOrAddressed = devices.filter(device => device.name !== undefined || device.address !== undefined);
