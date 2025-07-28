@@ -31,6 +31,16 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdDNkI2OEU3QzZEMjkxQ0QKUldUTmtkTEc1MmhyZk53bnViR1BPR3JoV0JBcjRMSjF3QXRjUFVpNWtiOGU0U0tmWW5Ha09IZlIK",
+      "endpoints": [
+        "https://gist.githubusercontent.com/tomekpiotrowski/6e229a4e9a589a9f4410a6ef86fa9f6b/raw/cubeast-connect-updater.json"
+      ]
+    }
   }
+
 }
