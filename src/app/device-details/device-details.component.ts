@@ -1,14 +1,14 @@
 import { Component, OnInit } from '@angular/core';
 import { DeviceData } from './device-data';
 import { CommonModule } from '@angular/common';
-import { invoke } from '@tauri-apps/api';
-import { ActivatedRoute } from '@angular/router';
+import { invoke } from '@tauri-apps/api/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { writeText } from '@tauri-apps/api/clipboard';
 import { LetDirective } from '@ngrx/component';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatButtonModule } from '@angular/material/button';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
 @Component({
   selector: 'app-device-details',
@@ -20,7 +20,7 @@ import { MatButtonModule } from '@angular/material/button';
 export class DeviceDetailsComponent implements OnInit {
   deviceDetails: BehaviorSubject<DeviceData | null | undefined> = new BehaviorSubject<DeviceData | null | undefined>(undefined);
 
-  constructor(private route: ActivatedRoute, private snackBar: MatSnackBar) { }
+  constructor(private route: ActivatedRoute, private router: Router, private snackBar: MatSnackBar) { }
 
   ngOnInit(): void {
     this.tryAgain();
@@ -51,5 +51,9 @@ export class DeviceDetailsComponent implements OnInit {
     }).catch(err => {
       console.error('Failed to copy device details:', err);
     });
+  }
+
+  goBack(): void {
+    this.router.navigate(['/discovery']);
   }
 }

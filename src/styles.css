@@ -15,16 +15,29 @@
 }
 
 .container {
-  margin: 0;
-  padding-top: 10vh;
+  margin: 16px;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+}
+
+.container.centered {
   text-align: center;
+  justify-content: center;
+}
+
+.header {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .logo {
   height: 6em;
+  margin: 1em;
   padding: 1.5em;
   will-change: filter;
   transition: 0.75s;

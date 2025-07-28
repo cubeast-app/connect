@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-show",
+    "core:default",
+    "opener:default",
+    "clipboard-manager:allow-write-text",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://app.cubeast.com"
+        }
+      ]
+    },
+    "clipboard-manager:default"
+  ]
+}

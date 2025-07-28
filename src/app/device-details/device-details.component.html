@@ -1,4 +1,7 @@
-<div class="device-details">
+<div class="container">
+  <div class="header">
+    <button mat-flat-button (click)="goBack()">← Back to Discovery</button>
+  </div>
   <ng-container *ngrxLet="deviceDetails; let details">
     @if (details) {
     <div>

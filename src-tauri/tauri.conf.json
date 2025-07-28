@@ -1,61 +1,36 @@
 {
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "cubeast-connect",
+  "version": "0.4.0",
+  "identifier": "com.cubeast.connect",
   "build": {
-    "beforeDevCommand": "yarn start --port 1420",
+    "beforeDevCommand": "yarn start",
+    "devUrl": "http://localhost:4200",
     "beforeBuildCommand": "yarn build",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist/cubeast-connect",
-    "withGlobalTauri": false
+    "frontendDist": "../dist/cubeast-connect/browser"
   },
-  "package": {
-    "productName": "cubeast-connect",
-    "version": "0.3.2"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "window": {
-        "all":true
-      },
-      "shell": {
-        "all": false,
-        "open": true
-      },
-      "clipboard": {
-        "writeText": true
-      }
-    },
-    "bundle": {
-      "active": true,
-      "icon": [
-        "icons/icon.png",
-        "icons/icon.ico"
-      ],
-      "identifier": "com.cubeast.connect",
-      "targets": "all"
-    },
-    "security": {
-      "csp": null
-    },
-    "updater": {
-      "active": true,
-      "endpoints": [
-        "https://gist.githubusercontent.com/tomekpiotrowski/6e229a4e9a589a9f4410a6ef86fa9f6b/raw/917757ea6d73e25118cd4d6e5c98449ad74306b6/cubeast-connect-updater.json"
-      ],
-      "dialog": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM2MkExN0FDMjA3NjJEOEUKUldTT0xYWWdyQmNxeG52elpsY24ycWpVN0RVRHRXYTVFRTVwYm9wSUFEVGxwUmY0OWtrM21sNzIK"
-    },
-    "systemTray": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
-    },
+  "app": {
     "windows": [
       {
-        "fullscreen": false,
-        "resizable": true,
         "title": "Cubeast Connect",
-        "width": 600,
-        "height": 400
+        "width": 800,
+        "height": 600,
+        "resizable": false
       }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
     ]
   }
 }

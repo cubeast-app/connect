@@ -1,6 +1,6 @@
 {
   "name": "cubeast-connect",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
@@ -24,7 +24,10 @@
     "@fortawesome/free-regular-svg-icons": "^6.7.2",
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "@ngrx/component": "^19.2.0",
-    "@tauri-apps/api": "^1.2.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-autostart": "^2.5.0",
+    "@tauri-apps/plugin-clipboard-manager": "~2",
+    "@tauri-apps/plugin-opener": "~2",
     "rxjs": "~7.8.0",
     "tauri-plugin-autostart-api": "https://github.com/tauri-apps/tauri-plugin-autostart",
     "tslib": "^2.3.0"
@@ -33,7 +36,7 @@
     "@angular/build": "^20.0.3",
     "@angular/cli": "~20.0.3",
     "@angular/compiler-cli": "^20.0.4",
-    "@tauri-apps/cli": "^1.2.2",
+    "@tauri-apps/cli": "^2.7.1",
     "@types/jasmine": "~4.3.0",
     "jasmine-core": "~4.5.0",
     "karma": "~6.4.0",

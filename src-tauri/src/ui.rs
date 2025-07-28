@@ -3,10 +3,12 @@ use std::{thread, time::Duration};
 use futures_util::StreamExt;
 use log::{error, info, trace};
 use tauri::{
-    api::shell::open, async_runtime::block_on, AppHandle, CustomMenuItem, GlobalWindowEvent,
-    Manager as _, State, SystemTray, SystemTrayEvent, SystemTrayMenu, Wry,
+    async_runtime::block_on,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter as _, Manager, State, WindowEvent, Wry,
 };
 use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_opener::open_url;
 
 use crate::bluetooth::{device_data::DeviceData, Bluetooth};
 
@@ -32,8 +34,7 @@ async fn start_discovery(
         let app_handle = app_handle.clone();
 
         while let Some(devices) = block_on(devices_stream.next()) {
-            trace!("Discovered devices: {:?}", devices);
-            app_handle.emit_all("discovery", devices).unwrap();
+            app_handle.emit("discovery", devices).unwrap();
         }
     });
 
@@ -74,56 +75,77 @@ async fn device_details(
 }
 
 pub fn build_tauri(bluetooth: Bluetooth) -> tauri::Builder<Wry> {
-    let tray_menu = SystemTrayMenu::new()
-        .add_item(CustomMenuItem::new("open", "Open"))
-        .add_item(CustomMenuItem::new("cubeast", "Go to Cubeast"))
-        .add_item(CustomMenuItem::new("exit", "Exit"));
-
-    let tray = SystemTray::new().with_menu(tray_menu);
-
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(Context { bluetooth })
-        .system_tray(tray)
         .invoke_handler(tauri::generate_handler![
             start_discovery,
             stop_discovery,
             device_details
         ])
-        .on_system_tray_event(handle_system_tray_event)
+        .setup(|app| {
+            TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(
+                    &tauri::menu::MenuBuilder::new(app)
+                        .text("open", "Open")
+                        .text("cubeast", "Go to Cubeast")
+                        .text("exit", "Exit")
+                        .build()?,
+                )
+                .on_menu_event(handle_menu_event)
+                .on_tray_icon_event(handle_tray_icon_event)
+                .build(app)?;
+
+            Ok(())
+        })
         .on_window_event(handle_window_event)
 }
 
-fn handle_window_event(event: GlobalWindowEvent) {
-    if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {
-        event.window().hide().unwrap();
+fn handle_window_event(window: &tauri::Window<Wry>, event: &WindowEvent) {
+    if let WindowEvent::CloseRequested { api, .. } = event {
+        window.hide().unwrap();
         api.prevent_close();
     }
 }
 
-fn handle_system_tray_event(app: &AppHandle<Wry>, event: SystemTrayEvent) {
-    if let SystemTrayEvent::MenuItemClick { id, .. } = event {
-        match id.as_str() {
-            "exit" => {
-                app.exit(0);
-            }
-            "open" => {
-                let window = app.get_window("main").unwrap();
-                window.show().unwrap();
-                window.unminimize().unwrap();
-                window.set_focus().unwrap();
-            }
-            "cubeast" => {
-                if let Err(err) = open(&app.shell_scope(), "https://app.cubeast.com", None) {
-                    error!("Failed to open Cubeast: {}", err);
-                }
-            }
-            _ => {
-                error!("Unknown menu item: {}", id);
+fn handle_menu_event(app: &AppHandle<Wry>, event: tauri::menu::MenuEvent) {
+    match event.id().as_ref() {
+        "exit" => {
+            app.exit(0);
+        }
+        "open" => {
+            let window = app.get_webview_window("main").unwrap();
+            window.show().unwrap();
+            window.unminimize().unwrap();
+            window.set_focus().unwrap();
+        }
+        "cubeast" => {
+            if let Err(err) = open_url("https://app.cubeast.com", None::<String>) {
+                error!("Failed to open Cubeast: {}", err);
             }
         }
+        _ => {
+            error!("Unknown menu item: {:?}", event.id());
+        }
+    }
+}
+
+fn handle_tray_icon_event(tray: &tauri::tray::TrayIcon<Wry>, event: TrayIconEvent) {
+    if let TrayIconEvent::Click {
+        button: MouseButton::Left,
+        button_state: MouseButtonState::Up,
+        ..
+    } = event
+    {
+        let app = tray.app_handle();
+        let window = app.get_webview_window("main").unwrap();
+        window.show().unwrap();
+        window.unminimize().unwrap();
+        window.set_focus().unwrap();
     }
 }
