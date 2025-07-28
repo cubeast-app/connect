@@ -11,6 +11,9 @@
     "core:default",
     "opener:default",
     "clipboard-manager:allow-write-text",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
     {
       "identifier": "opener:allow-open-url",
       "allow": [
@@ -19,6 +22,7 @@
         }
       ]
     },
-    "clipboard-manager:default"
+    "clipboard-manager:default",
+    "cli:default"
   ]
 }

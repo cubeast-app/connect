@@ -14,6 +14,14 @@ button {
   margin-right: 24px;
 }
 
-.container {
-  gap: 16px;
+.app-header {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 1.6em;
+}
+
+.row.padding {
+  padding-top: 16px;
 }

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "cubeast-connect",
+  "productName": "Cubeast Connect",
   "version": "0.4.0",
   "identifier": "com.cubeast.connect",
   "build": {
@@ -13,9 +13,10 @@
     "windows": [
       {
         "title": "Cubeast Connect",
-        "width": 800,
-        "height": 600,
-        "resizable": false
+        "width": 700,
+        "height": 450,
+        "resizable": false,
+        "visible": false
       }
     ],
     "security": {
@@ -39,6 +40,16 @@
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEwN0EzRDExMkU2OTE5NjcKUldSbkdXa3VFVDE2RUp1YmNQa3ZuaXFIMTZXdFA0TGF0dmNlNlFvYm9sYzB1MG54bWhFNVdQMkkK",
       "endpoints": [
         "https://gist.githubusercontent.com/tomekpiotrowski/6e229a4e9a589a9f4410a6ef86fa9f6b/raw/cubeast-connect-updater.json"
+      ]
+    },
+    "cli": {
+      "description": "Cubeast Connect",
+      "args": [
+        {
+          "short": "b",
+          "name": "background",
+          "description": "Don't open the UI on app start"
+        }
       ]
     }
   }

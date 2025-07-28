@@ -5,7 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { Router } from '@angular/router';
 import { Observable, from } from 'rxjs';
-import { disable, enable, isEnabled } from 'tauri-plugin-autostart-api';
+import { enable, isEnabled, disable } from '@tauri-apps/plugin-autostart';
 
 @Component({
   selector: 'app-main',
@@ -17,7 +17,7 @@ import { disable, enable, isEnabled } from 'tauri-plugin-autostart-api';
 })
 export class MainComponent {
   @ViewChild(MatSlideToggle)
-  private timerComponent!: MatSlideToggle;
+  private autostartToggle!: MatSlideToggle;
 
   appVersion = signal<string | undefined>(undefined);
 
@@ -25,7 +25,7 @@ export class MainComponent {
 
   ngOnInit(): void {
     getVersion().then(version => this.appVersion.set(version));
-    isEnabled().then(enabled => this.timerComponent.checked = enabled);
+    isEnabled().then(enabled => this.autostartToggle.checked = enabled);
   }
 
   ngOnDestroy(): void {

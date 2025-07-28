@@ -1,5 +1,5 @@
 <div class="container centered">
-  <div>
+  <div class="app-header">
     <h1>Cubeast Connect</h1>
     <h4>{{ appVersion() }}</h4>
   </div>
@@ -9,12 +9,10 @@
     </a>
   </div>
   <div class="row">
-  </div>
-  <div class="row">
     <button mat-flat-button (click)="discover()">Devices</button>
     <button mat-flat-button (click)="help()">Help</button>
   </div>
-  <div class="row">
+  <div class="row padding">
     <mat-slide-toggle (change)="updateStartOnBoot($event.checked)">Launch on system startup</mat-slide-toggle>
   </div>
 </div>
