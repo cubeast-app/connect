@@ -8,6 +8,7 @@ use tauri::{
     AppHandle, Emitter as _, Manager, State, WindowEvent, Wry,
 };
 use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_cli::CliExt as _;
 use tauri_plugin_opener::open_url;
 
 use crate::bluetooth::{device_data::DeviceData, Bluetooth};
@@ -80,9 +81,10 @@ pub fn build_tauri(bluetooth: Bluetooth) -> tauri::Builder<Wry> {
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
-            None,
+            Some(vec!["--background"]),
         ))
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_cli::init())
         .manage(Context { bluetooth })
         .invoke_handler(tauri::generate_handler![
             start_discovery,
@@ -102,6 +104,28 @@ pub fn build_tauri(bluetooth: Bluetooth) -> tauri::Builder<Wry> {
                 .on_menu_event(handle_menu_event)
                 .on_tray_icon_event(handle_tray_icon_event)
                 .build(app)?;
+
+            match app.cli().matches() {
+                Ok(matches) => {
+                    let background = matches
+                        .args
+                        .get("background")
+                        .and_then(|value| value.value.as_bool())
+                        .unwrap_or(false);
+
+                    let window = app.get_webview_window("main").unwrap();
+                    if background {
+                        info!("Running in background mode");
+                        window.hide().unwrap();
+                    } else {
+                        info!("Running in normal mode");
+                        window.show().unwrap();
+                        window.unminimize().unwrap();
+                        window.set_focus().unwrap();
+                    }
+                }
+                Err(_) => {}
+            }
 
             Ok(())
         })
