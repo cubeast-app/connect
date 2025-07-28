@@ -34,7 +34,9 @@ async fn start_discovery(
         let app_handle = app_handle.clone();
 
         while let Some(devices) = block_on(devices_stream.next()) {
-            app_handle.emit("discovery", devices).unwrap();
+            if let Err(e) = app_handle.emit("discovery", devices) {
+                error!("Failed to emit discovery event: {}", e);
+            }
         }
     });
 
