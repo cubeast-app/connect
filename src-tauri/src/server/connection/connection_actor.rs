@@ -16,7 +16,8 @@ use uuid::Uuid;
 
 use crate::server::message::response::Response;
 use crate::{
-    bluetooth::characteristic_value::CharacteristicValue, server::message::broadcast::Broadcast,
+    app_status::AppStatus, bluetooth::characteristic_value::CharacteristicValue,
+    server::message::broadcast::Broadcast,
 };
 use crate::{
     bluetooth::notifications::notification_stream::NotificationStream,
@@ -41,10 +42,13 @@ pub(super) enum ConnectionMessage {
         characteristic_id: Uuid,
         value: CharacteristicValue,
     },
+    /// Global status update
+    StatusChanged(crate::app_status::Status),
 }
 
 pub(super) struct ConnectionActor {
     bluetooth: Bluetooth,
+    app_status: AppStatus,
     self_tx: UnboundedSender<ConnectionMessage>,
     websocket_write: SplitSink<WebSocketStream<TcpStream>, TungsteniteMessage>,
     discovery_abort: Option<oneshot::Sender<()>>,
@@ -54,11 +58,13 @@ pub(super) struct ConnectionActor {
 impl ConnectionActor {
     pub fn new(
         bluetooth: Bluetooth,
+        app_status: AppStatus,
         self_tx: UnboundedSender<ConnectionMessage>,
         write: SplitSink<WebSocketStream<TcpStream>, TungsteniteMessage>,
     ) -> Self {
         Self {
             bluetooth,
+            app_status,
             self_tx,
             websocket_write: write,
             discovery_abort: None,
@@ -83,6 +89,7 @@ impl ConnectionActor {
                     self.characteristic_notification(device_id, characteristic_id, value)
                         .await
                 }
+                ConnectionMessage::StatusChanged(status) => self.status_changed(status).await,
             }
         }
     }
@@ -154,6 +161,17 @@ impl ConnectionActor {
         }
     }
 
+    async fn status_changed(&mut self, status: crate::app_status::Status) {
+        let broadcast = Broadcast::StatusChanged { status };
+
+        let serialized = serde_json::to_string(&broadcast).unwrap();
+        let broadcast = TungsteniteMessage::Text(serialized);
+
+        if let Err(err) = self.websocket_write.send(broadcast).await {
+            warn!("Failed to send status update: {:?}", err);
+        }
+    }
+
     async fn request(&mut self, request: Request) -> Response {
         match request {
             Request::StartDiscovery => self.start_discovery().await,
@@ -219,8 +237,8 @@ impl ConnectionActor {
                     .await
             }
 
-            Request::Version => Response::Version {
-                version: env!("CARGO_PKG_VERSION").to_string(),
+            Request::Status => Response::Status {
+                status: self.app_status.get().await,
             },
         }
     }
@@ -256,6 +274,20 @@ impl ConnectionActor {
         } else {
             Response::error("Discovery is not running")
         }
+    }
+
+    pub fn start_status_listener(&self) {
+        let mut status_rx = self.app_status.subscribe();
+        let tx = self.self_tx.clone();
+
+        tokio::spawn(async move {
+            while let Ok(status) = status_rx.recv().await {
+                if let Err(err) = tx.send(ConnectionMessage::StatusChanged(status)) {
+                    error!("Failed to send status change: {:?}", err);
+                    break;
+                }
+            }
+        });
     }
 
     pub(super) fn websocket(&self, mut read: SplitStream<WebSocketStream<TcpStream>>) {

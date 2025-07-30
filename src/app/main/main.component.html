@@ -1,18 +1,18 @@
 <div class="container centered">
   <div class="app-header">
     <h1>Cubeast Connect</h1>
-    <p>{{ appVersion() }}</p>
+    <p>{{ statusService.getStatusText() }}</p>
   </div>
   <div class="row">
-    <a href="https://cubeast.com" target="_blank">
+    <a (click)="openCubeast()">
       <div class="logo"></div>
     </a>
   </div>
   <div class="row">
-    <button matButton (click)="discover()">Devices</button>
-    <button matButton (click)="help()">Help</button>
+    <button matButton="filled" (click)="discover()">Devices</button>
+    <button matButton="filled" (click)="help()">Help</button>
   </div>
   <div class="row padding">
-    <mat-slide-toggle (change)="updateStartOnBoot($event.checked)">Launch on system startup</mat-slide-toggle>
+    <mat-slide-toggle (change)="startOnBoot($event.checked)">Launch on system startup</mat-slide-toggle>
   </div>
 </div>

@@ -29,5 +29,5 @@ pub enum Request {
         device_id: String,
         characteristic_id: Uuid,
     },
-    Version,
+    Status,
 }

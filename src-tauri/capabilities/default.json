@@ -23,6 +23,7 @@
       ]
     },
     "clipboard-manager:default",
-    "cli:default"
+    "cli:default",
+    "updater:default"
   ]
 }

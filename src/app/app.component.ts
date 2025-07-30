@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, ViewChild } from "@angular/core";
+import { Component } from "@angular/core";
 import { RouterOutlet } from "@angular/router";
 
 @Component({
@@ -9,4 +9,6 @@ import { RouterOutlet } from "@angular/router";
   standalone: true
 })
 export class AppComponent {
+  constructor() {
+  }
 }
