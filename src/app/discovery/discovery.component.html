@@ -1,12 +1,12 @@
 <div class="container">
   <div class="header">
-    <button mat-flat-button (click)="goBack()">← Back</button>
+    <button matButton (click)="goBack()">← Back</button>
     <mat-slide-toggle (change)="showOnlyCubingDevices($event.checked)" [disabled]="false" checked="true">Show only
       recognized cubing devices</mat-slide-toggle>
     @if (isScanning | async) {
       <mat-spinner diameter="20"></mat-spinner>
     } @else {
-      <button mat-flat-button (click)="reScan()">Re-scan</button>
+      <button matButton (click)="reScan()">Re-scan</button>
     }
   </div>
   <ng-container *ngrxLet="shownDevices; let devices">
@@ -26,7 +26,7 @@
           @if (encryptionKey(device); as key) {
           <div class="encryption-key-container">
             <div class="key">{{ key }}</div>
-            <button mat-mini-fab (click)="copyToClipboard(key)">
+            <button matMiniFab (click)="copyToClipboard(key)">
               <mat-icon>content_copy</mat-icon>
             </button>
           </div>
@@ -38,7 +38,7 @@
       <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef></th>
         <td mat-cell *matCellDef="let device">
-          <button mat-flat-button (click)="details(device)">
+          <button matButton (click)="details(device)">
             Details
           </button>
         </td>

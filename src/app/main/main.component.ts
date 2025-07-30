@@ -10,7 +10,7 @@ import { enable, isEnabled, disable } from '@tauri-apps/plugin-autostart';
 @Component({
   selector: 'app-main',
   templateUrl: './main.component.html',
-  styleUrls: ['./main.component.css'],
+  styleUrls: ['./main.component.scss'],
   imports: [MatSlideToggleModule, MatButtonModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true
