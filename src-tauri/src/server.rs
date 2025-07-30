@@ -12,7 +12,7 @@ use tokio_tungstenite::{
     },
 };
 
-use crate::{bluetooth::Bluetooth, server::connection::Connection};
+use crate::{app_status::AppStatus, bluetooth::Bluetooth, server::connection::Connection};
 
 mod connection;
 mod message;
@@ -27,13 +27,16 @@ pub const ALLOWED_HOSTS: [&str; 4] = [
 pub struct Server;
 
 impl Server {
-    pub(crate) fn start(bluetooth: Bluetooth) {
+    pub(crate) fn start(bluetooth: Bluetooth, app_status: AppStatus) {
+        let bluetooth_clone = bluetooth.clone();
+        let app_status_clone = app_status.clone();
+
         tokio::spawn(async move {
-            Self::run(bluetooth).await;
+            Self::run(bluetooth_clone, app_status_clone).await;
         });
     }
 
-    async fn run(bluetooth: Bluetooth) {
+    async fn run(bluetooth: Bluetooth, app_status: AppStatus) {
         let listener = create_tcp_listener().await;
 
         info!(
@@ -77,7 +80,7 @@ impl Server {
 
             if let Ok(ws_stream) = ws_stream {
                 let (write, read) = ws_stream.split();
-                Connection::start(bluetooth.clone(), read, write);
+                Connection::start(bluetooth.clone(), app_status.clone(), read, write);
             }
         }
     }

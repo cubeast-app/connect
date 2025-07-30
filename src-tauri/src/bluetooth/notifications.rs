@@ -5,6 +5,7 @@ use btleplug::{
     platform::Peripheral,
     Error,
 };
+use log::error;
 use notification_stream::NotificationStream;
 use notifications_message::NotificationsMessage;
 use tokio::sync::{
@@ -83,13 +84,13 @@ impl NotificationsActor {
                 NotificationsMessage::Subscribe(characteristic_id, tx) => {
                     let result = self.subscribe(characteristic_id).await;
                     if tx.send(result).is_err() {
-                        eprintln!("Failed to send subscribe response");
+                        error!("Failed to send subscribe response");
                     }
                 }
                 NotificationsMessage::Unsubscribe(characteristic_id, tx) => {
                     let result = self.unsubscribe(characteristic_id).await;
                     if tx.send(result).is_err() {
-                        eprintln!("Failed to send unsubscribe response");
+                        error!("Failed to send unsubscribe response");
                     }
                 }
                 NotificationsMessage::Stop => break,

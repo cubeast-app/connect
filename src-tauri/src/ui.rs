@@ -10,11 +10,14 @@ use tauri::{
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_cli::CliExt as _;
 use tauri_plugin_opener::open_url;
+use tauri_plugin_updater::UpdaterExt as _;
 
+use crate::app_status::{AppStatus, Status};
 use crate::bluetooth::{device_data::DeviceData, Bluetooth};
 
 struct Context {
     bluetooth: Bluetooth,
+    status: AppStatus,
 }
 
 #[tauri::command]
@@ -77,7 +80,14 @@ async fn device_details(
     Ok(device_data)
 }
 
-pub fn build_tauri(bluetooth: Bluetooth) -> tauri::Builder<Wry> {
+#[tauri::command]
+async fn app_status(context: State<'_, Context>) -> Result<Status, String> {
+    Ok(context.status.get().await)
+}
+
+pub fn build_tauri(bluetooth: Bluetooth, status: AppStatus) -> tauri::Builder<Wry> {
+    let status_for_tauri = status.clone();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -85,18 +95,30 @@ pub fn build_tauri(bluetooth: Bluetooth) -> tauri::Builder<Wry> {
         ))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_cli::init())
-        .manage(Context { bluetooth })
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init())
+        .manage(Context {
+            bluetooth,
+            status: status.clone(),
+        })
         .invoke_handler(tauri::generate_handler![
             start_discovery,
             stop_discovery,
-            device_details
+            device_details,
+            app_status
         ])
-        .setup(|app| {
+        .setup(move |app| {
+            #[cfg(desktop)]
+            let _ = app
+                .handle()
+                .plugin(tauri_plugin_updater::Builder::new().build());
+
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(
                     &tauri::menu::MenuBuilder::new(app)
                         .text("open", "Open")
+                        .text("update", "Check for updates")
                         .text("cubeast", "Go to Cubeast")
                         .text("exit", "Exit")
                         .build()?,
@@ -104,6 +126,30 @@ pub fn build_tauri(bluetooth: Bluetooth) -> tauri::Builder<Wry> {
                 .on_menu_event(handle_menu_event)
                 .on_tray_icon_event(handle_tray_icon_event)
                 .build(app)?;
+
+            let handle = app.handle().clone();
+            let status_clone = status_for_tauri.clone();
+
+            tokio::spawn(async move {
+                let mut status_rx = status_clone.subscribe();
+                loop {
+                    match status_rx.recv().await {
+                        Ok(status) => {
+                            if let Err(e) = handle.emit("app_status_changed", status) {
+                                error!("Failed to emit status event: {}", e);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            });
+
+            let handle = app.handle().clone();
+            let status_clone = status_for_tauri.clone();
+
+            tauri::async_runtime::spawn(async move {
+                update(handle, status_clone).await.unwrap();
+            });
 
             match app.cli().matches() {
                 Ok(matches) => {
@@ -115,10 +161,8 @@ pub fn build_tauri(bluetooth: Bluetooth) -> tauri::Builder<Wry> {
 
                     let window = app.get_webview_window("main").unwrap();
                     if background {
-                        info!("Running in background mode");
                         window.hide().unwrap();
                     } else {
-                        info!("Running in normal mode");
                         window.show().unwrap();
                         window.unminimize().unwrap();
                         window.set_focus().unwrap();
@@ -156,6 +200,16 @@ fn handle_menu_event(app: &AppHandle<Wry>, event: tauri::menu::MenuEvent) {
                 error!("Failed to open Cubeast: {}", err);
             }
         }
+        "update" => {
+            let handle = app.clone();
+            let status_clone = app.state::<Context>().status.clone();
+
+            tauri::async_runtime::spawn(async move {
+                if let Err(err) = update(handle, status_clone).await {
+                    error!("Failed to check for updates: {}", err);
+                }
+            });
+        }
         _ => {
             error!("Unknown menu item: {:?}", event.id());
         }
@@ -175,4 +229,56 @@ fn handle_tray_icon_event(tray: &tauri::tray::TrayIcon<Wry>, event: TrayIconEven
         window.unminimize().unwrap();
         window.set_focus().unwrap();
     }
+}
+
+async fn update(app: tauri::AppHandle, app_status: AppStatus) -> tauri_plugin_updater::Result<()> {
+    app_status.update(Status::CheckingForUpdates).await;
+
+    if let Some(update) = app.updater()?.check().await? {
+        let mut downloaded = 0;
+        let mut progress = 0;
+
+        info!("Update available: {}", update.version);
+
+        update
+            .download_and_install(
+                move |chunk_length, content_length| {
+                    downloaded += chunk_length;
+
+                    let new_progress = if let Some(total) = content_length {
+                        ((downloaded as f64 / total as f64) * 100.0) as u8
+                    } else {
+                        0
+                    };
+
+                    if new_progress != progress {
+                        progress = new_progress;
+                        let app_status_clone = app_status.clone();
+                        tokio::spawn(async move {
+                            app_status_clone
+                                .update(Status::DownloadingUpdate {
+                                    progress: new_progress,
+                                })
+                                .await;
+                        });
+                    }
+                },
+                || {
+                    info!("Download finished");
+                },
+            )
+            .await?;
+
+        info!("Update installed");
+        app.restart();
+    } else {
+        // No update available, set status to running
+        app_status
+            .update(Status::Running {
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            })
+            .await;
+    }
+
+    Ok(())
 }

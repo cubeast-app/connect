@@ -32,10 +32,12 @@ button {
   background-repeat: no-repeat;
   background-position: center;
   background-image: url('/assets/logo-light.png');
+  filter: drop-shadow(0 0 0 #24c8db);
 }
 
 .logo:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
+  filter: drop-shadow(0 0 0.5em #24c8db);
+  cursor: pointer;
 }
 
 @media (prefers-color-scheme: dark) {

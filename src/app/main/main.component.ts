@@ -2,10 +2,12 @@ import { ChangeDetectionStrategy, Component, signal, ViewChild } from '@angular/
 import { MatButtonModule } from '@angular/material/button';
 import { MatSlideToggle, MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { invoke } from '@tauri-apps/api/core';
-import { getVersion } from '@tauri-apps/api/app';
 import { Router } from '@angular/router';
 import { Observable, from } from 'rxjs';
 import { enable, isEnabled, disable } from '@tauri-apps/plugin-autostart';
+import { relaunch } from '@tauri-apps/plugin-process';
+import { openUrl } from '@tauri-apps/plugin-opener';
+import { StatusService } from '../status.service';
 
 @Component({
   selector: 'app-main',
@@ -19,28 +21,21 @@ export class MainComponent {
   @ViewChild(MatSlideToggle)
   private autostartToggle!: MatSlideToggle;
 
-  appVersion = signal<string | undefined>(undefined);
-
-  constructor(private router: Router) {}
+  constructor(private router: Router, public statusService: StatusService) { }
 
   ngOnInit(): void {
-    getVersion().then(version => this.appVersion.set(version));
     isEnabled().then(enabled => this.autostartToggle.checked = enabled);
   }
 
   ngOnDestroy(): void {
   }
 
-  updateStartOnBoot(start: boolean): void {
+  startOnBoot(start: boolean): void {
     if (start) {
       enable().then(() => { });
     } else {
       disable().then(() => { });
     }
-  }
-
-  refreshStatus(): Observable<number | string> {
-    return from(invoke<number | string>("status"));
   }
 
   discover(): void {
@@ -50,4 +45,13 @@ export class MainComponent {
   help(): void {
     this.router.navigate(['/help']);
   }
+
+  openCubeast(): void {
+    openUrl('https://cubeast.com');
+  }
+
+  async update(): Promise<void> {
+    await relaunch();
+  }
 }
+

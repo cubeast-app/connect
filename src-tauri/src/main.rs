@@ -14,12 +14,15 @@
     clippy::todo
 )]
 
+mod app_status;
 mod bluetooth;
 mod server;
 mod ui;
 
 use bluetooth::Bluetooth;
 use server::Server;
+
+use crate::app_status::AppStatus;
 
 #[tokio::main]
 async fn main() {
@@ -29,10 +32,10 @@ async fn main() {
         .await
         .expect("Failed to connect to the Bluetooth adapter");
     let bluetooth = Bluetooth::start(adapter);
+    let app_status = AppStatus::new();
 
-    Server::start(bluetooth.clone());
-
-    ui::build_tauri(bluetooth)
+    Server::start(bluetooth.clone(), app_status.clone());
+    ui::build_tauri(bluetooth, app_status)
         .run(tauri::generate_context!())
         .expect("error while running Cubeast Connect");
 }
