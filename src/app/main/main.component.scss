@@ -1,0 +1,45 @@
+button {
+  margin-right: 24px;
+}
+
+.app-header {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  h1 {
+    font-size: 24px;
+  }
+
+  p {
+    margin: 4px;
+  }
+}
+
+.row.padding {
+  padding-top: 12px;
+}
+
+.logo {
+  width: 300px;
+  height: 120px;
+  margin: 1em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: 0.75s;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-image: url('/assets/logo-light.png');
+}
+
+.logo:hover {
+  filter: drop-shadow(0 0 2em #24c8db);
+}
+
+@media (prefers-color-scheme: dark) {
+  .logo {
+    background-image: url('/assets/logo-dark.png');
+  }
+}

@@ -146,6 +146,7 @@ fn handle_menu_event(app: &AppHandle<Wry>, event: tauri::menu::MenuEvent) {
         }
         "open" => {
             let window = app.get_webview_window("main").unwrap();
+            window.center().unwrap();
             window.show().unwrap();
             window.unminimize().unwrap();
             window.set_focus().unwrap();

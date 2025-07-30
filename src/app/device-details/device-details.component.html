@@ -1,9 +1,10 @@
 <div class="container">
   <div class="header">
-    <button mat-flat-button (click)="goBack()">← Back to Discovery</button>
+    <button matButton (click)="goBack()">← Back</button>
   </div>
   <ng-container *ngrxLet="deviceDetails; let details">
     @if (details) {
+    <button matButton (click)="copyToClipboard()">Copy to clipboard</button>
     <div>
       <p><strong>Name:</strong> {{ details.name }}</p>
       <p><strong>Address:</strong> {{ details.address }}</p>
@@ -22,15 +23,13 @@
           </ul>
         </li>
       </ul>
-
-      <button mat-flat-button (click)="copyToClipboard()">Copy to clipboard</button>
     </div>
     } @else {
       @if (details === null) {
       <div class="error-message">
         <p>Failed to connect to device. Make sure it's powered on and it's not already connected to another computer or
           phone.</p>
-        <button mat-flat-button (click)="tryAgain()">Try Again</button>
+        <button matButton (click)="tryAgain()">Try Again</button>
       </div>
       } @else {
       <div class="loading-message">
