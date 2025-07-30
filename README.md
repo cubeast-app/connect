@@ -16,8 +16,8 @@ This allows Cubeast to connect to Bluetooth devices without having to depend on 
 Currently the app exposes a Websocket API on port 17430. Example of an exchange:
 
 ```
--> {"type":"request", "id":"1", "request": {"type":"version"}}
-<- {"type":"response", "id":"1", "response": {"result":"version", "version": "1.0.0"}}
+-> {"type":"request", "id":"1", "request": {"type":"status"}}
+<- {"type":"response", "id":"1", "response": {"result":"status", "status": { "type": "running", "version": "1.0.0"}}}
 -> {"type":"request", "id":"2", "request":{"type":"start-discovery"}}
 <- {"type":"response","id":"2","response":{"result":"ok"}}
 <- {"type": "discovered-devices","devices": [{
