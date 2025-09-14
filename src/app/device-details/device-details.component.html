@@ -18,6 +18,7 @@
               {{ characteristic.uuid }}
               <span *ngIf="characteristic.read">[Read]</span>
               <span *ngIf="characteristic.write">[Write]</span>
+              <span *ngIf="characteristic.write_without_response">[Write Without Response]</span>
               <span *ngIf="characteristic.notify">[Notify]</span>
             </li>
           </ul>

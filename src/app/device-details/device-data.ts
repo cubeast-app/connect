@@ -2,6 +2,7 @@ export interface CharacteristicData {
   uuid: string;
   read: boolean;
   write: boolean;
+  write_without_response: boolean;
   notify: boolean;
 }
 
