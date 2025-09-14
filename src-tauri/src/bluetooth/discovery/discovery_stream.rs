@@ -32,7 +32,7 @@ pub(super) async fn discovery_stream(
                     match handle_discovery_event(adapter.clone()).await {
                         Ok(devices) => Some(devices),
                         Err(err) => {
-                            warn!("Error handling central event: {:?}", err);
+                            warn!("Error handling central event: {err:?}");
                             None
                         }
                     }

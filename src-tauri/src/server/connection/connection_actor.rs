@@ -123,7 +123,7 @@ impl ConnectionActor {
             .send(TungsteniteMessage::Text(serialized))
             .await
         {
-            error!("Failed to send websocket message: {:?}", err);
+            error!("Failed to send websocket message: {err:?}");
         }
     }
 
@@ -136,7 +136,7 @@ impl ConnectionActor {
         let result = self.websocket_write.send(broadcast).await;
 
         if let Err(err) = result {
-            warn!("Failed to send message to client: {:?}", err);
+            warn!("Failed to send message to client: {err:?}");
         }
     }
 
@@ -157,7 +157,7 @@ impl ConnectionActor {
         let broadcast = TungsteniteMessage::Text(serialized);
 
         if let Err(err) = self.websocket_write.send(broadcast).await {
-            warn!("Failed to send characteristic notification: {:?}", err);
+            warn!("Failed to send characteristic notification: {err:?}");
         }
     }
 
@@ -168,7 +168,7 @@ impl ConnectionActor {
         let broadcast = TungsteniteMessage::Text(serialized);
 
         if let Err(err) = self.websocket_write.send(broadcast).await {
-            warn!("Failed to send status update: {:?}", err);
+            warn!("Failed to send status update: {err:?}");
         }
     }
 
@@ -267,7 +267,7 @@ impl ConnectionActor {
             let result = discovery_abort.send(());
 
             if let Err(err) = result {
-                error!("Failed to abort discovery: {:?}", err);
+                error!("Failed to abort discovery: {err:?}");
             }
 
             Response::Ok
@@ -283,7 +283,7 @@ impl ConnectionActor {
         tokio::spawn(async move {
             while let Ok(status) = status_rx.recv().await {
                 if let Err(err) = tx.send(ConnectionMessage::StatusChanged(status)) {
-                    error!("Failed to send status change: {:?}", err);
+                    error!("Failed to send status change: {err:?}");
                     break;
                 }
             }
@@ -296,7 +296,7 @@ impl ConnectionActor {
         tokio::spawn(async move {
             while let Some(message) = read.next().await {
                 if let Err(err) = tx.send(ConnectionMessage::WebsocketMessageReceived(message)) {
-                    error!("Failed to send websocket message: {:?}", err);
+                    error!("Failed to send websocket message: {err:?}");
                 }
             }
 
@@ -318,7 +318,7 @@ impl ConnectionActor {
                 Response::Ok
             }
             Err(err) => {
-                error!("Failed to start discovery: {:?}", err);
+                error!("Failed to start discovery: {err:?}");
                 Response::Error {
                     error: String::from("Failed to start discovery"),
                 }
@@ -345,7 +345,7 @@ impl ConnectionActor {
                         devices = discovery_stream.next() => {
                             if let Some(devices) = devices {
                                 if let Err(err) = tx.send(ConnectionMessage::DevicesDiscovered(devices)) {
-                                    error!("Failed to send discovered devices: {:?}", err);
+                                    error!("Failed to send discovered devices: {err:?}");
                                 }
                             } else {
                                 break;
@@ -436,7 +436,7 @@ impl ConnectionActor {
                                 characteristic_id,
                                 value: CharacteristicValue { timestamp, value: value.value },
                             }) {
-                                error!("Failed to send notification: {:?}", err);
+                                error!("Failed to send notification: {err:?}");
                             }
                         } else {
                             break;

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "type")]
 pub enum Status {
     CheckingForUpdates,
@@ -37,7 +37,7 @@ impl AppStatus {
 
             // Broadcast to all subscribers
             if let Err(err) = self.broadcaster.send(status) {
-                error!("Failed to send status update: {}", err);
+                error!("Failed to send status update: {err}");
             }
         }
     }

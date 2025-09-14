@@ -57,14 +57,14 @@ impl Server {
                     }
 
                     if let Some(origin) = origin {
-                        trace!("Origin header: {:?}", origin);
+                        trace!("Origin header: {origin:?}");
                         let uri = origin.to_str().unwrap_or_default().parse::<Uri>();
 
                         if let Ok(uri) = uri {
                             let host = uri.host();
 
                             if let Some(host) = host {
-                                trace!("Received connection from host: {}", host);
+                                trace!("Received connection from host: {host}");
                                 if ALLOWED_HOSTS.contains(&host) {
                                     return Ok(response);
                                 }
@@ -72,7 +72,7 @@ impl Server {
                         }
                     }
 
-                    info!("Rejected connection from {:?}", origin);
+                    info!("Rejected connection from {origin:?}");
                     Err(HttpResponse::builder().status(403).body(None).unwrap())
                 },
             )

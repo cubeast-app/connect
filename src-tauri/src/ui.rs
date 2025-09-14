@@ -39,7 +39,7 @@ async fn start_discovery(
 
         while let Some(devices) = block_on(devices_stream.next()) {
             if let Err(e) = app_handle.emit("discovery", devices) {
-                error!("Failed to emit discovery event: {}", e);
+                error!("Failed to emit discovery event: {e}");
             }
         }
     });
@@ -60,7 +60,7 @@ async fn device_details(
     context: State<'_, Context>,
     device_id: String,
 ) -> Result<DeviceData, String> {
-    info!("Fetching details for device: {}", device_id);
+    info!("Fetching details for device: {device_id}");
     let connection_future = context.bluetooth.connect(&device_id);
 
     let timeout = Duration::from_secs(15);
@@ -75,7 +75,7 @@ async fn device_details(
         .await
         .map_err(|err| err.to_string())?;
 
-    info!("Device data: {:?}", device_data);
+    info!("Device data: {device_data:?}");
 
     Ok(device_data)
 }
@@ -133,13 +133,10 @@ pub fn build_tauri(bluetooth: Bluetooth, status: AppStatus) -> tauri::Builder<Wr
             tokio::spawn(async move {
                 let mut status_rx = status_clone.subscribe();
                 loop {
-                    match status_rx.recv().await {
-                        Ok(status) => {
-                            if let Err(e) = handle.emit("app_status_changed", status) {
-                                error!("Failed to emit status event: {}", e);
-                            }
+                    if let Ok(status) = status_rx.recv().await {
+                        if let Err(e) = handle.emit("app_status_changed", status) {
+                            error!("Failed to emit status event: {e}");
                         }
-                        _ => {}
                     }
                 }
             });
@@ -151,24 +148,21 @@ pub fn build_tauri(bluetooth: Bluetooth, status: AppStatus) -> tauri::Builder<Wr
                 update(handle, status_clone).await.unwrap();
             });
 
-            match app.cli().matches() {
-                Ok(matches) => {
-                    let background = matches
-                        .args
-                        .get("background")
-                        .and_then(|value| value.value.as_bool())
-                        .unwrap_or(false);
+            if let Ok(matches) = app.cli().matches() {
+                let background = matches
+                    .args
+                    .get("background")
+                    .and_then(|value| value.value.as_bool())
+                    .unwrap_or(false);
 
-                    let window = app.get_webview_window("main").unwrap();
-                    if background {
-                        window.hide().unwrap();
-                    } else {
-                        window.show().unwrap();
-                        window.unminimize().unwrap();
-                        window.set_focus().unwrap();
-                    }
+                let window = app.get_webview_window("main").unwrap();
+                if background {
+                    window.hide().unwrap();
+                } else {
+                    window.show().unwrap();
+                    window.unminimize().unwrap();
+                    window.set_focus().unwrap();
                 }
-                Err(_) => {}
             }
 
             Ok(())
@@ -197,7 +191,7 @@ fn handle_menu_event(app: &AppHandle<Wry>, event: tauri::menu::MenuEvent) {
         }
         "cubeast" => {
             if let Err(err) = open_url("https://app.cubeast.com", None::<String>) {
-                error!("Failed to open Cubeast: {}", err);
+                error!("Failed to open Cubeast: {err}");
             }
         }
         "update" => {
@@ -206,7 +200,7 @@ fn handle_menu_event(app: &AppHandle<Wry>, event: tauri::menu::MenuEvent) {
 
             tauri::async_runtime::spawn(async move {
                 if let Err(err) = update(handle, status_clone).await {
-                    error!("Failed to check for updates: {}", err);
+                    error!("Failed to check for updates: {err}");
                 }
             });
         }

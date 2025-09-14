@@ -259,7 +259,7 @@ impl BluetoothActor {
         result_tx: oneshot::Sender<Result<(), Error>>,
     ) {
         if let Err(err) = result_tx.send(self.disconnect(device_id).await) {
-            error!("Failed to send disconnect result: {:?}", err);
+            error!("Failed to send disconnect result: {err:?}");
         }
     }
 
@@ -314,7 +314,7 @@ impl BluetoothActor {
 
     async fn connect(&mut self, device_id: String) -> Result<DeviceData, Error> {
         if let Some(device) = self.connected_devices.get_mut(&device_id) {
-            info!("Reusing existing connection to {}", device_id);
+            info!("Reusing existing connection to {device_id}");
 
             device.add_client();
 
@@ -325,11 +325,11 @@ impl BluetoothActor {
 
         for peripheral in peripherals {
             if device_id == peripheral.id().to_string() {
-                info!("Found device: {}", device_id);
+                info!("Found device: {device_id}");
 
                 // Connect to the peripheral
                 peripheral.connect().await?;
-                info!("Connected to {}", device_id);
+                info!("Connected to {device_id}");
 
                 let mut connected_device =
                     ConnectedDevice::start(peripheral.clone(), device_id.clone()).await?;
@@ -353,7 +353,7 @@ impl BluetoothActor {
 
             if device.has_no_clients() {
                 let device = self.connected_devices.remove(&device_id);
-                info!("Disconnected from {}", device_id);
+                info!("Disconnected from {device_id}");
 
                 let device = device.unwrap();
                 device.notifications.stop().await;
@@ -362,7 +362,7 @@ impl BluetoothActor {
                 Ok(())
             }
         } else {
-            error!("No connected device found with ID: {}", device_id);
+            error!("No connected device found with ID: {device_id}");
 
             Err(Error::DeviceNotFound)
         }
