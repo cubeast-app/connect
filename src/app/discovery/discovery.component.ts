@@ -17,7 +17,7 @@ import { CommonModule } from '@angular/common';
 type DiscoveredDevicesFilter = (devices: DiscoveredDevice[]) => DiscoveredDevice[];
 
 const NoFilter: DiscoveredDevicesFilter = devices => devices;
-const CubingPrefixes = ['GAN', 'MG', 'AiCube', 'Gi', 'Mi Smart Magic Cube', 'GoCube', 'Rubiks', 'MHC', 'WCU'];
+const CubingPrefixes = ['GAN', 'MG', 'AiCube', 'Gi', 'Mi Smart Magic Cube', 'GoCube', 'Rubiks', 'MHC', 'WCU', 'QY-'];
 const CubingDeviceFilter: DiscoveredDevicesFilter = devices => devices.filter(isCubingDevice);
 const ScanTimeout = 30000;
 
