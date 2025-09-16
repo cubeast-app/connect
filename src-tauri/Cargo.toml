@@ -1,6 +1,6 @@
 [package]
 name = "cubeast-connect"
-version = "0.5.1"
+version = "0.5.2"
 description = "Cubeast Bluetooth proxy"
 authors = ["Cubeast"]
 license = "MIT"
