@@ -17,7 +17,8 @@ import { CommonModule } from '@angular/common';
 type DiscoveredDevicesFilter = (devices: DiscoveredDevice[]) => DiscoveredDevice[];
 
 const NoFilter: DiscoveredDevicesFilter = devices => devices;
-const CubingPrefixes = ['GAN', 'MG', 'AiCube', 'Gi', 'Mi Smart Magic Cube', 'GoCube', 'Rubiks', 'MHC', 'WCU', 'QY-'];
+const QiYiPrefix = 'QY-';
+const CubingPrefixes = ['GAN', 'MG', 'AiCube', 'Gi', 'Mi Smart Magic Cube', 'GoCube', 'Rubiks', 'MHC', 'WCU', QiYiPrefix];
 const CubingDeviceFilter: DiscoveredDevicesFilter = devices => devices.filter(isCubingDevice);
 const ScanTimeout = 30000;
 
@@ -94,8 +95,20 @@ export class DiscoveryComponent {
       return undefined;
     }
 
-    // extract the last 6 bytes of the manufacturer data, reverse them and format them as a MAC address
+    if (device.name?.startsWith(QiYiPrefix)) {
+      return this.qiyiEncryptionKey(manufacturerDataPart);
+    } else {
+      return this.ganEncryptionKey(manufacturerDataPart);
+    }
+  }
+
+  private ganEncryptionKey(manufacturerDataPart: number[]): string | undefined {
     return manufacturerDataPart.slice(-6).reverse().map(byte => byte.toString(16).padStart(2, '0')).join(':').toUpperCase();
+  }
+
+
+  private qiyiEncryptionKey(manufacturerDataPart: number[]): string | undefined {
+    return manufacturerDataPart.slice(0, 6).reverse().map(byte => byte.toString(16).padStart(2, '0')).join(':').toUpperCase();
   }
 
   async copyToClipboard(text: string): Promise<void> {
