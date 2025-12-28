@@ -14,9 +14,9 @@
       {
         "title": "Cubeast Connect",
         "width": 700,
-        "height": 450,
+        "height": 480,
         "resizable": false,
-        "visible": false,
+        "visible": true,
         "closable": true,
         "minimizable": true
       }
