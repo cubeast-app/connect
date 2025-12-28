@@ -1,0 +1,56 @@
+name: Version Check
+
+on:
+  workflow_call:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate version match
+        shell: bash
+        run: |
+          # Extract version from git tag (remove 'v' prefix)
+          TAG_VERSION="${GITHUB_REF#refs/tags/}"
+          TAG_VERSION="${TAG_VERSION#v}"
+
+          # JSON files: grab first "version": "x.y.z" occurrence (portable awk)
+          extract_json_version() {
+            awk -F '"' '/"version"[[:space:]]*:[[:space:]]*/ { \
+              for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+(\.[0-9]+)*$/) { print $i; exit } \
+            }' "$1"
+          }
+
+          # TOML files: grab first version = "x.y.z"
+          extract_toml_version() {
+            awk -F '"' '/^[[:space:]]*version[[:space:]]*=/ { \
+              for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+(\.[0-9]+)*$/) { print $i; exit } \
+            }' "$1"
+          }
+
+          PACKAGE_VERSION=$(extract_json_version package.json)
+          TAURI_VERSION=$(extract_json_version src-tauri/tauri.conf.json)
+          CARGO_VERSION=$(extract_toml_version src-tauri/Cargo.toml)
+
+          echo "Tag version: $TAG_VERSION"
+          echo "package.json version: $PACKAGE_VERSION"
+          echo "tauri.conf.json version: $TAURI_VERSION"
+          echo "Cargo.toml version: $CARGO_VERSION"
+
+          if [ -z "$TAG_VERSION" ] || [ -z "$PACKAGE_VERSION" ] || [ -z "$TAURI_VERSION" ] || [ -z "$CARGO_VERSION" ]; then
+            echo "❌ Failed to extract one or more versions"
+            exit 1
+          fi
+
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ] || [ "$TAG_VERSION" != "$TAURI_VERSION" ] || [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+            echo "❌ Version mismatch detected!"
+            echo "Tag: v$TAG_VERSION"
+            echo "package.json: $PACKAGE_VERSION"
+            echo "tauri.conf.json: $TAURI_VERSION"
+            echo "Cargo.toml: $CARGO_VERSION"
+            exit 1
+          fi
+
+          echo "✅ All versions match: $TAG_VERSION"
