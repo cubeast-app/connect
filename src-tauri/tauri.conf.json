@@ -27,7 +27,11 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "appimage",
+      "dmg",
+      "msi"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -41,7 +45,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEwN0EzRDExMkU2OTE5NjcKUldSbkdXa3VFVDE2RUp1YmNQa3ZuaXFIMTZXdFA0TGF0dmNlNlFvYm9sYzB1MG54bWhFNVdQMkkK",
       "endpoints": [
-        "https://gist.githubusercontent.com/tomekpiotrowski/6e229a4e9a589a9f4410a6ef86fa9f6b/raw/cubeast-connect-updater.json"
+        "https://github.com/cubeast-app/connect/releases/latest/download/latest.json"
       ]
     },
     "cli": {
