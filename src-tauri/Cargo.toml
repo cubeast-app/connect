@@ -13,14 +13,13 @@ edition = "2021"
 tauri-build = { version = "2.3", features = [] }
 
 [dependencies]
-tauri = { version = "2.7", features = ["tray-icon"] }
+tauri = { version = "2.9", features = ["tray-icon"] }
 tauri-plugin-shell = "2.0.0"
 tauri-plugin-clipboard-manager = "2"
 
 btleplug = "0.11.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-lets_expect = "0.5.1"
 log = "0.4"
 pretty_env_logger = "0.4.0"
 tokio = { version = "1", features = ["full"] }
