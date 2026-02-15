@@ -75,9 +75,44 @@ jobs:
       - name: install frontend dependencies
         run: yarn install # change this to npm or pnpm depending on which one you use
       - uses: tauri-apps/tauri-action@v0
+        id: tauri-build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY}}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
+
+      - name: Upload version-agnostic assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Extract version from tag (remove 'v' prefix)
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          
+          # Find and upload version-agnostic copies of release assets
+          cd src-tauri/target/release/bundle
+          
+          # Windows: .exe installer
+          if [ -f "nsis/Cubeast.Connect_${VERSION}_x64-setup.exe" ]; then
+            echo "Creating version-agnostic Windows installer..."
+            cp "nsis/Cubeast.Connect_${VERSION}_x64-setup.exe" "Cubeast.Connect_x64-setup.exe"
+            gh release upload "${{ github.ref_name }}" "Cubeast.Connect_x64-setup.exe" --clobber
+            echo "✓ Uploaded Cubeast.Connect_x64-setup.exe"
+          fi
+          
+          # macOS: .dmg (Apple Silicon)
+          if [ -f "dmg/Cubeast.Connect_${VERSION}_aarch64.dmg" ]; then
+            echo "Creating version-agnostic macOS installer..."
+            cp "dmg/Cubeast.Connect_${VERSION}_aarch64.dmg" "Cubeast.Connect_aarch64.dmg"
+            gh release upload "${{ github.ref_name }}" "Cubeast.Connect_aarch64.dmg" --clobber
+            echo "✓ Uploaded Cubeast.Connect_aarch64.dmg"
+          fi
+          
+          # Linux: .AppImage
+          if [ -f "appimage/Cubeast.Connect_${VERSION}_amd64.AppImage" ]; then
+            echo "Creating version-agnostic Linux installer..."
+            cp "appimage/Cubeast.Connect_${VERSION}_amd64.AppImage" "Cubeast.Connect_amd64.AppImage"
+            gh release upload "${{ github.ref_name }}" "Cubeast.Connect_amd64.AppImage" --clobber
+            echo "✓ Uploaded Cubeast.Connect_amd64.AppImage"
+          fi

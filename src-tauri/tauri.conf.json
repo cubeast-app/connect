@@ -58,9 +58,8 @@
         },
         {
           "name": "bind",
-          "description": "TCP bind address for the WebSocket server",
-          "takesValue": true,
-          "defaultValue": "127.0.0.1:17430"
+          "description": "TCP bind address for the WebSocket server (default: 127.0.0.1:17430)",
+          "takesValue": true
         },
         {
           "name": "allow-any-origin",
