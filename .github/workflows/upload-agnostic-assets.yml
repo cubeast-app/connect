@@ -26,7 +26,6 @@ jobs:
         run: |
           TAG="${{ inputs.tag }}"
           VERSION="${TAG#v}"
-          echo "Processing tag: $TAG (version: $VERSION)"
 
           # Create temp directory
           mkdir -p temp_assets
@@ -35,17 +34,12 @@ jobs:
           # Download all assets from the release
           gh release download "$TAG" --repo ${{ github.repository }}
 
-          echo "Downloaded files:"
-          ls -lh
-
           # Windows: .msi installer
           if [ -f "Cubeast.Connect_${VERSION}_x64_en-US.msi" ]; then
-            echo "Creating version-agnostic Windows MSI installer..."
+            echo "Creating version-agnostic Windows installer..."
             cp "Cubeast.Connect_${VERSION}_x64_en-US.msi" "Cubeast.Connect_x64_en-US.msi"
             gh release upload "$TAG" "Cubeast.Connect_x64_en-US.msi" --repo ${{ github.repository }} --clobber
             echo "✓ Uploaded Cubeast.Connect_x64_en-US.msi"
-          else
-            echo "⚠ Windows MSI installer not found: Cubeast.Connect_${VERSION}_x64_en-US.msi"
           fi
 
           # macOS: .dmg (Apple Silicon)
@@ -54,8 +48,6 @@ jobs:
             cp "Cubeast.Connect_${VERSION}_aarch64.dmg" "Cubeast.Connect_aarch64.dmg"
             gh release upload "$TAG" "Cubeast.Connect_aarch64.dmg" --repo ${{ github.repository }} --clobber
             echo "✓ Uploaded Cubeast.Connect_aarch64.dmg"
-          else
-            echo "⚠ macOS installer not found: Cubeast.Connect_${VERSION}_aarch64.dmg"
           fi
 
           # Linux: .AppImage
@@ -64,6 +56,4 @@ jobs:
             cp "Cubeast.Connect_${VERSION}_amd64.AppImage" "Cubeast.Connect_amd64.AppImage"
             gh release upload "$TAG" "Cubeast.Connect_amd64.AppImage" --repo ${{ github.repository }} --clobber
             echo "✓ Uploaded Cubeast.Connect_amd64.AppImage"
-          else
-            echo "⚠ Linux installer not found: Cubeast.Connect_${VERSION}_amd64.AppImage"
           fi
