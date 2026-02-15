@@ -55,6 +55,16 @@
           "short": "b",
           "name": "background",
           "description": "Don't open the UI on app start"
+        },
+        {
+          "name": "bind",
+          "description": "TCP bind address for the WebSocket server",
+          "takesValue": true,
+          "defaultValue": "127.0.0.1:17430"
+        },
+        {
+          "name": "allow-any-origin",
+          "description": "Allow any origin for WebSocket connections (INSECURE - for development only)"
         }
       ]
     }

@@ -14,6 +14,7 @@ use tauri_plugin_updater::UpdaterExt as _;
 
 use crate::app_status::{AppStatus, Status};
 use crate::bluetooth::{device_data::DeviceData, Bluetooth};
+use crate::server::Server;
 
 struct Context {
     bluetooth: Bluetooth,
@@ -87,6 +88,8 @@ async fn app_status(context: State<'_, Context>) -> Result<Status, String> {
 
 pub fn build_tauri(bluetooth: Bluetooth, status: AppStatus) -> tauri::Builder<Wry> {
     let status_for_tauri = status.clone();
+    let bluetooth_for_setup = bluetooth.clone();
+    let status_for_setup = status.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::init(
@@ -108,6 +111,29 @@ pub fn build_tauri(bluetooth: Bluetooth, status: AppStatus) -> tauri::Builder<Wr
             app_status
         ])
         .setup(move |app| {
+            // Parse CLI arguments and start WebSocket server
+            if let Ok(matches) = app.cli().matches() {
+                let bind_addr = matches
+                    .args
+                    .get("bind")
+                    .and_then(|value| value.value.as_str())
+                    .unwrap_or("127.0.0.1:17430")
+                    .to_string();
+
+                let allow_any_origin = matches
+                    .args
+                    .get("allow-any-origin")
+                    .and_then(|value| value.value.as_bool())
+                    .unwrap_or(false);
+
+                Server::start(
+                    bluetooth_for_setup.clone(),
+                    status_for_setup.clone(),
+                    bind_addr,
+                    allow_any_origin,
+                );
+            }
+
             #[cfg(desktop)]
             let _ = app
                 .handle()

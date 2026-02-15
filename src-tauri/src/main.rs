@@ -20,7 +20,6 @@ mod server;
 mod ui;
 
 use bluetooth::Bluetooth;
-use server::Server;
 
 use crate::app_status::AppStatus;
 
@@ -34,7 +33,6 @@ async fn main() {
     let bluetooth = Bluetooth::start(adapter);
     let app_status = AppStatus::new();
 
-    Server::start(bluetooth.clone(), app_status.clone());
     ui::build_tauri(bluetooth, app_status)
         .run(tauri::generate_context!())
         .expect("error while running Cubeast Connect");
