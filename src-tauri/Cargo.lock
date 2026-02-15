@@ -833,7 +833,7 @@ dependencies = [
 
 [[package]]
 name = "cubeast-connect"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "btleplug",
  "chrono",
