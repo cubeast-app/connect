@@ -1,7 +1,7 @@
 use std::{thread, time::Duration};
 
 use futures_util::StreamExt;
-use log::{error, info, trace};
+use tracing::{error, info, trace};
 use tauri::{
     async_runtime::block_on,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},

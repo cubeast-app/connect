@@ -10,7 +10,7 @@ use super::{
     discovered_device::DiscoveredDevice, discovery_message::DiscoveryMessage,
     discovery_stream::DiscoveryStream,
 };
-use log::{error, info, trace};
+use tracing::{error, info, trace};
 
 pub(super) struct DiscoveryActor {
     adapter: Adapter,

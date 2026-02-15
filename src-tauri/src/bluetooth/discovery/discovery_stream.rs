@@ -9,7 +9,7 @@ use futures_util::{
     stream::{iter, select},
     Stream, StreamExt as _,
 };
-use log::warn;
+use tracing::warn;
 
 use super::discovered_device::DiscoveredDevice;
 

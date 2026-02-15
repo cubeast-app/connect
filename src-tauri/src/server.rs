@@ -1,6 +1,6 @@
 use futures_util::StreamExt;
 use http::{Response as HttpResponse, Uri};
-use log::{info, trace, warn};
+use tracing::{info, trace, warn};
 use tokio::net::TcpListener;
 use tokio_tungstenite::{
     self,

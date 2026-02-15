@@ -5,7 +5,7 @@ use btleplug::{
     platform::Peripheral,
     Error,
 };
-use log::error;
+use tracing::error;
 use notification_stream::NotificationStream;
 use notifications_message::NotificationsMessage;
 use tokio::sync::{

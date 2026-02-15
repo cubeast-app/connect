@@ -5,7 +5,7 @@ use futures_util::{
     stream::{SplitSink, SplitStream},
     StreamExt,
 };
-use log::{error, info, warn};
+use tracing::{error, info, warn};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::oneshot;
 use tokio::{net::TcpStream, select, sync::mpsc::UnboundedSender};

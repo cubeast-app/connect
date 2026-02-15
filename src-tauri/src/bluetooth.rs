@@ -9,7 +9,7 @@ use characteristic_value::CharacteristicValue;
 use connected_device::ConnectedDevice;
 use device_data::DeviceData;
 use discovery::discovery_stream::DiscoveryStream;
-use log::{error, info};
+use tracing::{error, info};
 use notifications::notification_stream::NotificationStream;
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},

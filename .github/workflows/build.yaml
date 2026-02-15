@@ -89,10 +89,10 @@ jobs:
         run: |
           # Extract version from tag (remove 'v' prefix)
           VERSION="${GITHUB_REF#refs/tags/v}"
-          
+
           # Find and upload version-agnostic copies of release assets
           cd src-tauri/target/release/bundle
-          
+
           # Windows: .exe installer
           if [ -f "nsis/Cubeast.Connect_${VERSION}_x64-setup.exe" ]; then
             echo "Creating version-agnostic Windows installer..."
@@ -100,7 +100,7 @@ jobs:
             gh release upload "${{ github.ref_name }}" "Cubeast.Connect_x64-setup.exe" --clobber
             echo "✓ Uploaded Cubeast.Connect_x64-setup.exe"
           fi
-          
+
           # macOS: .dmg (Apple Silicon)
           if [ -f "dmg/Cubeast.Connect_${VERSION}_aarch64.dmg" ]; then
             echo "Creating version-agnostic macOS installer..."
@@ -108,7 +108,7 @@ jobs:
             gh release upload "${{ github.ref_name }}" "Cubeast.Connect_aarch64.dmg" --clobber
             echo "✓ Uploaded Cubeast.Connect_aarch64.dmg"
           fi
-          
+
           # Linux: .AppImage
           if [ -f "appimage/Cubeast.Connect_${VERSION}_amd64.AppImage" ]; then
             echo "Creating version-agnostic Linux installer..."

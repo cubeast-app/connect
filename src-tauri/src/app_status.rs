@@ -1,4 +1,4 @@
-use log::error;
+use tracing::error;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
