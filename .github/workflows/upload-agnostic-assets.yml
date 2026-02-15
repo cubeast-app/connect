@@ -38,16 +38,6 @@ jobs:
           echo "Downloaded files:"
           ls -lh
 
-          # Windows: .exe installer
-          if [ -f "Cubeast.Connect_${VERSION}_x64-setup.exe" ]; then
-            echo "Creating version-agnostic Windows installer..."
-            cp "Cubeast.Connect_${VERSION}_x64-setup.exe" "Cubeast.Connect_x64-setup.exe"
-            gh release upload "$TAG" "Cubeast.Connect_x64-setup.exe" --repo ${{ github.repository }} --clobber
-            echo "✓ Uploaded Cubeast.Connect_x64-setup.exe"
-          else
-            echo "⚠ Windows installer not found: Cubeast.Connect_${VERSION}_x64-setup.exe"
-          fi
-
           # Windows: .msi installer
           if [ -f "Cubeast.Connect_${VERSION}_x64_en-US.msi" ]; then
             echo "Creating version-agnostic Windows MSI installer..."
@@ -69,21 +59,11 @@ jobs:
           fi
 
           # Linux: .AppImage
-          if [ -f "cubeast-connect_${VERSION}_amd64.AppImage" ]; then
+          if [ -f "Cubeast.Connect_${VERSION}_amd64.AppImage" ]; then
             echo "Creating version-agnostic Linux installer..."
-            cp "cubeast-connect_${VERSION}_amd64.AppImage" "cubeast-connect_amd64.AppImage"
-            gh release upload "$TAG" "cubeast-connect_amd64.AppImage" --repo ${{ github.repository }} --clobber
-            echo "✓ Uploaded cubeast-connect_amd64.AppImage"
+            cp "Cubeast.Connect_${VERSION}_amd64.AppImage" "Cubeast.Connect_amd64.AppImage"
+            gh release upload "$TAG" "Cubeast.Connect_amd64.AppImage" --repo ${{ github.repository }} --clobber
+            echo "✓ Uploaded Cubeast.Connect_amd64.AppImage"
           else
-            echo "⚠ Linux installer not found: cubeast-connect_${VERSION}_amd64.AppImage"
-          fi
-
-          # Linux: .deb
-          if [ -f "cubeast-connect_${VERSION}_amd64.deb" ]; then
-            echo "Creating version-agnostic Linux deb package..."
-            cp "cubeast-connect_${VERSION}_amd64.deb" "cubeast-connect_amd64.deb"
-            gh release upload "$TAG" "cubeast-connect_amd64.deb" --repo ${{ github.repository }} --clobber
-            echo "✓ Uploaded cubeast-connect_amd64.deb"
-          else
-            echo "⚠ Linux deb package not found: cubeast-connect_${VERSION}_amd64.deb"
+            echo "⚠ Linux installer not found: Cubeast.Connect_${VERSION}_amd64.AppImage"
           fi
