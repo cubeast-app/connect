@@ -5,13 +5,13 @@ use btleplug::{
     platform::Peripheral,
     Error,
 };
-use tracing::error;
 use notification_stream::NotificationStream;
 use notifications_message::NotificationsMessage;
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     oneshot,
 };
+use tracing::error;
 use uuid::Uuid;
 
 use crate::bluetooth::notifications::notification_stream::notification_stream;

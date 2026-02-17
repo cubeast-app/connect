@@ -1,6 +1,5 @@
 use futures_util::StreamExt;
 use http::{Response as HttpResponse, Uri};
-use tracing::{info, trace, warn};
 use tokio::net::TcpListener;
 use tokio_tungstenite::{
     self,
@@ -9,6 +8,7 @@ use tokio_tungstenite::{
         server::{ErrorResponse, Response},
     },
 };
+use tracing::{info, trace, warn};
 
 use crate::{app_status::AppStatus, bluetooth::Bluetooth, server::connection::Connection};
 

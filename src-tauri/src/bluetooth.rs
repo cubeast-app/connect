@@ -9,12 +9,12 @@ use characteristic_value::CharacteristicValue;
 use connected_device::ConnectedDevice;
 use device_data::DeviceData;
 use discovery::discovery_stream::DiscoveryStream;
-use tracing::{error, info};
 use notifications::notification_stream::NotificationStream;
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     oneshot::{self},
 };
+use tracing::{error, info};
 use uuid::Uuid;
 
 use self::discovery::Discovery;

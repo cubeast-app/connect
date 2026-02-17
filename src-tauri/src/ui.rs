@@ -1,7 +1,6 @@
 use std::{thread, time::Duration};
 
 use futures_util::StreamExt;
-use tracing::{error, info, trace};
 use tauri::{
     async_runtime::block_on,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -11,6 +10,7 @@ use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_cli::CliExt as _;
 use tauri_plugin_opener::open_url;
 use tauri_plugin_updater::UpdaterExt as _;
+use tracing::{error, info, trace};
 
 use crate::app_status::{AppStatus, Status};
 use crate::bluetooth::{device_data::DeviceData, Bluetooth};

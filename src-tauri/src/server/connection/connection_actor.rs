@@ -5,13 +5,13 @@ use futures_util::{
     stream::{SplitSink, SplitStream},
     StreamExt,
 };
-use tracing::{error, info, warn};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::oneshot;
 use tokio::{net::TcpStream, select, sync::mpsc::UnboundedSender};
 use tokio_tungstenite::tungstenite::Error as TungsteniteError;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::{self, tungstenite::Message as TungsteniteMessage};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::server::message::response::Response;
@@ -44,6 +44,8 @@ pub(super) enum ConnectionMessage {
     },
     /// Global status update
     StatusChanged(crate::app_status::Status),
+    /// WebSocket connection was closed
+    ConnectionClosed,
 }
 
 pub(super) struct ConnectionActor {
@@ -53,6 +55,7 @@ pub(super) struct ConnectionActor {
     websocket_write: SplitSink<WebSocketStream<TcpStream>, TungsteniteMessage>,
     discovery_abort: Option<oneshot::Sender<()>>,
     notification_aborts: HashMap<(String, Uuid), oneshot::Sender<()>>,
+    status_listener_abort: Option<oneshot::Sender<()>>,
 }
 
 impl ConnectionActor {
@@ -69,6 +72,7 @@ impl ConnectionActor {
             websocket_write: write,
             discovery_abort: None,
             notification_aborts: HashMap::new(),
+            status_listener_abort: None,
         }
     }
 
@@ -90,6 +94,11 @@ impl ConnectionActor {
                         .await
                 }
                 ConnectionMessage::StatusChanged(status) => self.status_changed(status).await,
+                ConnectionMessage::ConnectionClosed => {
+                    info!("Connection closed, cleaning up");
+                    self.cleanup();
+                    break;
+                }
             }
         }
     }
@@ -276,15 +285,32 @@ impl ConnectionActor {
         }
     }
 
-    pub fn start_status_listener(&self) {
+    pub fn start_status_listener(&mut self) {
         let mut status_rx = self.app_status.subscribe();
         let tx = self.self_tx.clone();
+        let (abort_sender, abort_receiver) = oneshot::channel();
+        self.status_listener_abort = Some(abort_sender);
 
         tokio::spawn(async move {
-            while let Ok(status) = status_rx.recv().await {
-                if let Err(err) = tx.send(ConnectionMessage::StatusChanged(status)) {
-                    error!("Failed to send status change: {err:?}");
-                    break;
+            use futures_util::FutureExt;
+            let mut abort = Box::pin(abort_receiver).fuse();
+
+            loop {
+                select! {
+                    _ = (&mut abort) => {
+                        break;
+                    },
+                    result = status_rx.recv() => {
+                        match result {
+                            Ok(status) => {
+                                if let Err(err) = tx.send(ConnectionMessage::StatusChanged(status)) {
+                                    error!("Failed to send status change: {err:?}");
+                                    break;
+                                }
+                            },
+                            Err(_) => break,
+                        }
+                    }
                 }
             }
         });
@@ -294,13 +320,17 @@ impl ConnectionActor {
         let tx = self.self_tx.clone();
 
         tokio::spawn(async move {
+            info!("Connection opened");
+
             while let Some(message) = read.next().await {
                 if let Err(err) = tx.send(ConnectionMessage::WebsocketMessageReceived(message)) {
                     error!("Failed to send websocket message: {err:?}");
+                    return;
                 }
             }
 
-            info!("Websocket message stream ended");
+            info!("Connection closed");
+            let _ = tx.send(ConnectionMessage::ConnectionClosed);
         });
     }
 
@@ -447,5 +477,22 @@ impl ConnectionActor {
         });
 
         abort_sender
+    }
+
+    fn cleanup(&mut self) {
+        // Abort discovery if running
+        if let Some(abort) = self.discovery_abort.take() {
+            let _ = abort.send(());
+        }
+
+        // Abort all notification streams
+        for (_, abort) in self.notification_aborts.drain() {
+            let _ = abort.send(());
+        }
+
+        // Abort status listener
+        if let Some(abort) = self.status_listener_abort.take() {
+            let _ = abort.send(());
+        }
     }
 }
