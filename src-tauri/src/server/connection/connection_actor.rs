@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use futures_util::SinkExt;
 use futures_util::{
@@ -56,6 +56,7 @@ pub(super) struct ConnectionActor {
     discovery_abort: Option<oneshot::Sender<()>>,
     notification_aborts: HashMap<(String, Uuid), oneshot::Sender<()>>,
     status_listener_abort: Option<oneshot::Sender<()>>,
+    connected_devices: HashSet<String>,
 }
 
 impl ConnectionActor {
@@ -73,6 +74,7 @@ impl ConnectionActor {
             discovery_abort: None,
             notification_aborts: HashMap::new(),
             status_listener_abort: None,
+            connected_devices: HashSet::new(),
         }
     }
 
@@ -96,7 +98,7 @@ impl ConnectionActor {
                 ConnectionMessage::StatusChanged(status) => self.status_changed(status).await,
                 ConnectionMessage::ConnectionClosed => {
                     info!("Connection closed, cleaning up");
-                    self.cleanup();
+                    self.cleanup().await;
                     break;
                 }
             }
@@ -186,18 +188,33 @@ impl ConnectionActor {
             Request::StartDiscovery => self.start_discovery().await,
             Request::StopDiscovery => self.stop_discovery(),
             Request::Connect { device_id } => {
+                if self.connected_devices.contains(&device_id) {
+                    return Response::Ok;
+                }
+
                 let result = self.bluetooth.connect(&device_id).await;
 
                 match result {
-                    Ok(device) => Response::Connected { device },
+                    Ok(device) => {
+                        self.connected_devices.insert(device_id);
+                        Response::Connected { device }
+                    }
                     Err(error) => Response::Error {
                         error: format!("Failed to connect to device: {error:?}"),
                     },
                 }
             }
             Request::Disconnect { device_id } => {
+                if !self.connected_devices.contains(&device_id) {
+                    return Response::Ok;
+                }
+
                 match self.bluetooth.disconnect(&device_id).await {
-                    Ok(()) => Response::Ok,
+                    Ok(()) => {
+                        self.connected_devices.remove(&device_id);
+
+                        Response::Ok
+                    }
                     Err(error) => Response::Error {
                         error: format!("Failed to disconnect from device: {error:?}"),
                     },
@@ -479,7 +496,15 @@ impl ConnectionActor {
         abort_sender
     }
 
-    fn cleanup(&mut self) {
+    async fn cleanup(&mut self) {
+        let connected_devices = std::mem::take(&mut self.connected_devices);
+
+        for device_id in connected_devices {
+            if let Err(err) = self.bluetooth.disconnect(&device_id).await {
+                warn!("Failed to disconnect {device_id} during connection cleanup: {err:?}");
+            }
+        }
+
         // Abort discovery if running
         if let Some(abort) = self.discovery_abort.take() {
             let _ = abort.send(());
