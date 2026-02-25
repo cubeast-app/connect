@@ -14,6 +14,7 @@ use tokio_tungstenite::{self, tungstenite::Message as TungsteniteMessage};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
+use crate::bluetooth::error::AppError;
 use crate::server::message::response::Response;
 use crate::{
     app_status::AppStatus, bluetooth::characteristic_value::CharacteristicValue,
@@ -44,6 +45,8 @@ pub(super) enum ConnectionMessage {
     },
     /// Global status update
     StatusChanged(crate::app_status::Status),
+    /// A previously-connected device dropped its BT connection unexpectedly
+    DeviceDisconnected(String),
     /// WebSocket connection was closed
     ConnectionClosed,
 }
@@ -56,6 +59,7 @@ pub(super) struct ConnectionActor {
     discovery_abort: Option<oneshot::Sender<()>>,
     notification_aborts: HashMap<(String, Uuid), oneshot::Sender<()>>,
     status_listener_abort: Option<oneshot::Sender<()>>,
+    disconnect_listener_abort: Option<oneshot::Sender<()>>,
     connected_devices: HashSet<String>,
 }
 
@@ -74,6 +78,7 @@ impl ConnectionActor {
             discovery_abort: None,
             notification_aborts: HashMap::new(),
             status_listener_abort: None,
+            disconnect_listener_abort: None,
             connected_devices: HashSet::new(),
         }
     }
@@ -96,6 +101,9 @@ impl ConnectionActor {
                         .await
                 }
                 ConnectionMessage::StatusChanged(status) => self.status_changed(status).await,
+                ConnectionMessage::DeviceDisconnected(device_id) => {
+                    self.device_disconnected(device_id).await;
+                }
                 ConnectionMessage::ConnectionClosed => {
                     info!("Connection closed, cleaning up");
                     self.cleanup().await;
@@ -199,9 +207,10 @@ impl ConnectionActor {
                         self.connected_devices.insert(device_id);
                         Response::Connected { device }
                     }
-                    Err(error) => Response::Error {
-                        error: format!("Failed to connect to device: {error:?}"),
-                    },
+                    Err(error) => {
+                        error!("Connect failed: {error:?}");
+                        Response::from(AppError::from(error))
+                    }
                 }
             }
             Request::Disconnect { device_id } => {
@@ -215,9 +224,10 @@ impl ConnectionActor {
 
                         Response::Ok
                     }
-                    Err(error) => Response::Error {
-                        error: format!("Failed to disconnect from device: {error:?}"),
-                    },
+                    Err(error) => {
+                        error!("Disconnect failed: {error:?}");
+                        Response::from(AppError::from(error))
+                    }
                 }
             }
 
@@ -235,9 +245,10 @@ impl ConnectionActor {
                         value: value.value,
                         timestamp: value.timestamp,
                     },
-                    Err(error) => Response::Error {
-                        error: format!("Failed to read characteristic: {error:?}"),
-                    },
+                    Err(error) => {
+                        error!("ReadCharacteristic failed: {error:?}");
+                        Response::from(AppError::from(error))
+                    }
                 }
             }
             Request::WriteCharacteristic {
@@ -279,11 +290,11 @@ impl ConnectionActor {
             .bluetooth
             .write_characteristic(&device_id, characteristic_id, value)
             .await;
-        if result.is_ok() {
-            Response::Ok
-        } else {
-            Response::Error {
-                error: String::from("Failed to write characteristic"),
+        match result {
+            Ok(()) => Response::Ok,
+            Err(error) => {
+                error!("WriteCharacteristic failed: {error:?}");
+                Response::from(AppError::from(error))
             }
         }
     }
@@ -298,7 +309,8 @@ impl ConnectionActor {
 
             Response::Ok
         } else {
-            Response::error("Discovery is not running")
+            error!("StopDiscovery called but discovery is not running");
+            Response::from(AppError::invalid_state())
         }
     }
 
@@ -333,6 +345,75 @@ impl ConnectionActor {
         });
     }
 
+    pub fn start_disconnect_listener(
+        &mut self,
+        mut disconnect_rx: tokio::sync::broadcast::Receiver<String>,
+    ) {
+        let tx = self.self_tx.clone();
+        let (abort_sender, abort_receiver) = oneshot::channel();
+        self.disconnect_listener_abort = Some(abort_sender);
+
+        tokio::spawn(async move {
+            use futures_util::FutureExt;
+            let mut abort = Box::pin(abort_receiver).fuse();
+
+            loop {
+                select! {
+                    _ = (&mut abort) => {
+                        break;
+                    },
+                    result = disconnect_rx.recv() => {
+                        match result {
+                            Ok(device_id) => {
+                                if let Err(err) =
+                                    tx.send(ConnectionMessage::DeviceDisconnected(device_id))
+                                {
+                                    error!("Failed to send device disconnected: {err:?}");
+                                    break;
+                                }
+                            }
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    async fn device_disconnected(&mut self, device_id: String) {
+        if !self.connected_devices.remove(&device_id) {
+            return; // device not known to this connection
+        }
+
+        warn!("Device {device_id} disconnected unexpectedly");
+
+        // Abort all notification streams for this device
+        let keys: Vec<_> = self
+            .notification_aborts
+            .keys()
+            .filter(|(did, _)| did == &device_id)
+            .cloned()
+            .collect();
+        for key in keys {
+            if let Some(abort) = self.notification_aborts.remove(&key) {
+                let _ = abort.send(());
+            }
+        }
+
+        // Notify the WebSocket client
+        let broadcast = Broadcast::Disconnected {
+            device_id: device_id.clone(),
+        };
+        let serialized = serde_json::to_string(&broadcast).unwrap();
+        if let Err(err) = self
+            .websocket_write
+            .send(TungsteniteMessage::Text(serialized))
+            .await
+        {
+            warn!("Failed to send disconnect notification to client: {err:?}");
+        }
+    }
+
     pub(super) fn websocket(&self, mut read: SplitStream<WebSocketStream<TcpStream>>) {
         let tx = self.self_tx.clone();
 
@@ -365,10 +446,8 @@ impl ConnectionActor {
                 Response::Ok
             }
             Err(err) => {
-                error!("Failed to start discovery: {err:?}");
-                Response::Error {
-                    error: String::from("Failed to start discovery"),
-                }
+                error!("StartDiscovery failed: {err:?}");
+                Response::from(AppError::from(err))
             }
         }
     }
@@ -426,9 +505,10 @@ impl ConnectionActor {
 
                 Response::Ok
             }
-            Err(err) => Response::Error {
-                error: format!("Failed to subscribe to characteristic: {err:?}"),
-            },
+            Err(err) => {
+                error!("SubscribeToCharacteristic failed: {err:?}");
+                Response::from(AppError::from(err))
+            }
         }
     }
 
@@ -441,18 +521,20 @@ impl ConnectionActor {
             .bluetooth
             .unsubscribe_from_characteristic(&device_id, characteristic_id)
             .await;
-        if result.is_ok() {
-            if let Some(abort_sender) = self
-                .notification_aborts
-                .remove(&(device_id, characteristic_id))
-            {
-                let _ = abort_sender.send(());
-            }
+        match result {
+            Ok(()) => {
+                if let Some(abort_sender) = self
+                    .notification_aborts
+                    .remove(&(device_id, characteristic_id))
+                {
+                    let _ = abort_sender.send(());
+                }
 
-            Response::Ok
-        } else {
-            Response::Error {
-                error: String::from("Failed to unsubscribe characteristic"),
+                Response::Ok
+            }
+            Err(error) => {
+                error!("UnsubscribeFromCharacteristic failed: {error:?}");
+                Response::from(AppError::from(error))
             }
         }
     }
@@ -517,6 +599,11 @@ impl ConnectionActor {
 
         // Abort status listener
         if let Some(abort) = self.status_listener_abort.take() {
+            let _ = abort.send(());
+        }
+
+        // Abort disconnect listener
+        if let Some(abort) = self.disconnect_listener_abort.take() {
             let _ = abort.send(());
         }
     }

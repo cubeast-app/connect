@@ -170,9 +170,24 @@ pub fn build_tauri(bluetooth: Bluetooth, status: AppStatus) -> tauri::Builder<Wr
             let handle = app.handle().clone();
             let status_clone = status_for_tauri.clone();
 
-            tauri::async_runtime::spawn(async move {
-                update(handle, status_clone).await.unwrap();
-            });
+            if let Ok(matches) = app.cli().matches() {
+                let skip_updates = matches
+                    .args
+                    .get("skip-updates")
+                    .and_then(|value| value.value.as_bool())
+                    .unwrap_or(false);
+
+                if !skip_updates {
+                    tauri::async_runtime::spawn(async move {
+                        update(handle, status_clone).await.unwrap();
+                    });
+                } else {
+                    let version = env!("CARGO_PKG_VERSION").to_string();
+                    tauri::async_runtime::spawn(async move {
+                        status_clone.update(Status::Running { version }).await;
+                    });
+                }
+            }
 
             if let Ok(matches) = app.cli().matches() {
                 let background = matches

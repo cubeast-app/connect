@@ -1,21 +1,25 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{bluetooth::device_data::DeviceData, app_status::Status};
+use crate::{bluetooth::{device_data::DeviceData, error::{AppError, ErrorCategory, ErrorCode}}, app_status::Status};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "result", rename_all = "kebab-case")]
 pub enum Response {
     Ok,
-    Error { error: String },
+    Error {
+        category: ErrorCategory,
+        code: ErrorCode,
+    },
     Value { timestamp: u64, value: Vec<u8> },
     Status { status: Status },
     Connected { device: DeviceData },
 }
 
-impl Response {
-    pub(crate) fn error(string: &str) -> Self {
+impl From<AppError> for Response {
+    fn from(err: AppError) -> Self {
         Self::Error {
-            error: String::from(string),
+            category: err.category,
+            code: err.code,
         }
     }
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use btleplug::{
-    api::{Central, Characteristic, Manager as _, Peripheral},
+    api::{Central, CentralEvent, Characteristic, Manager as _, Peripheral},
     platform::{Adapter, Manager, Peripheral as PlatformPeripheral},
     Error,
 };
@@ -9,12 +9,14 @@ use characteristic_value::CharacteristicValue;
 use connected_device::ConnectedDevice;
 use device_data::DeviceData;
 use discovery::discovery_stream::DiscoveryStream;
+use futures_util::StreamExt;
 use notifications::notification_stream::NotificationStream;
 use tokio::sync::{
+    broadcast,
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     oneshot::{self},
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use self::discovery::Discovery;
@@ -23,6 +25,7 @@ pub mod characteristic_value;
 pub mod connected_device;
 pub mod device_data;
 pub mod discovery;
+pub mod error;
 pub mod notifications;
 mod timestamp;
 
@@ -58,20 +61,26 @@ pub(crate) async fn adapter() -> Result<Adapter, Error> {
 #[derive(Clone)]
 pub(crate) struct Bluetooth {
     tx: UnboundedSender<BluetoothMessage>,
+    disconnect_tx: broadcast::Sender<String>,
 }
 
 impl Bluetooth {
     pub fn start(adapter: Adapter) -> Self {
         let (tx, rx) = unbounded_channel();
+        let (disconnect_tx, _) = broadcast::channel(16);
 
         let discovery = Discovery::start(adapter.clone());
-        let mut actor = BluetoothActor::new(adapter, discovery);
+        let mut actor = BluetoothActor::new(adapter, discovery, disconnect_tx.clone());
 
         tokio::spawn(async move {
             actor.run(rx).await;
         });
 
-        Self { tx }
+        Self { tx, disconnect_tx }
+    }
+
+    pub fn subscribe_to_disconnections(&self) -> broadcast::Receiver<String> {
+        self.disconnect_tx.subscribe()
     }
 
     pub async fn subscribe_to_discovery(&self) -> Result<DiscoveryStream, Error> {
@@ -184,47 +193,78 @@ pub(crate) struct BluetoothActor {
     adapter: Adapter,
     discovery: Discovery,
     connected_devices: HashMap<String, ConnectedDevice>,
+    disconnect_tx: broadcast::Sender<String>,
 }
 
 impl BluetoothActor {
-    fn new(adapter: Adapter, discovery: Discovery) -> Self {
+    fn new(
+        adapter: Adapter,
+        discovery: Discovery,
+        disconnect_tx: broadcast::Sender<String>,
+    ) -> Self {
         Self {
             adapter,
             discovery,
             connected_devices: HashMap::new(),
+            disconnect_tx,
         }
     }
 
     async fn run(&mut self, mut rx: UnboundedReceiver<BluetoothMessage>) {
-        while let Some(message) = rx.recv().await {
-            match message {
-                BluetoothMessage::SubscribeToDiscovery(result_tx) => {
-                    self.handle_subscribe_to_discovery(result_tx).await;
-                }
-                BluetoothMessage::UnsubscribeFromDiscovery => {
-                    self.handle_unsubscribe_from_discovery().await;
-                }
-                BluetoothMessage::Connect(device_id, result_tx) => {
-                    self.handle_connect(device_id, result_tx).await;
-                }
-                BluetoothMessage::Disconnect(device_id, result_tx) => {
-                    self.handle_disconnect(device_id, result_tx).await;
-                }
-                BluetoothMessage::ReadCharacteristic(device_id, uuid, sender) => {
-                    self.handle_read_characteristic(device_id, uuid, sender)
-                        .await;
-                }
-                BluetoothMessage::WriteCharacteristic(device_id, uuid, value, sender) => {
-                    self.handle_write_characteristic(device_id, uuid, value, sender)
-                        .await;
-                }
-                BluetoothMessage::SubscribeToCharacteristic(device_id, uuid, sender) => {
-                    self.handle_subscribe_to_characteristic(device_id, uuid, sender)
-                        .await;
-                }
-                BluetoothMessage::UnsubscribeFromCharacteristic(device_id, uuid, sender) => {
-                    self.handle_unsubscribe_from_characteristic(device_id, uuid, sender)
-                        .await;
+        let mut events = match self.adapter.events().await {
+            Ok(stream) => stream,
+            Err(e) => {
+                error!("Failed to subscribe to adapter events: {e:?}");
+                return;
+            }
+        };
+
+        loop {
+            tokio::select! {
+                message = rx.recv() => {
+                    let Some(message) = message else { break; };
+                    match message {
+                        BluetoothMessage::SubscribeToDiscovery(result_tx) => {
+                            self.handle_subscribe_to_discovery(result_tx).await;
+                        }
+                        BluetoothMessage::UnsubscribeFromDiscovery => {
+                            self.handle_unsubscribe_from_discovery().await;
+                        }
+                        BluetoothMessage::Connect(device_id, result_tx) => {
+                            self.handle_connect(device_id, result_tx).await;
+                        }
+                        BluetoothMessage::Disconnect(device_id, result_tx) => {
+                            self.handle_disconnect(device_id, result_tx).await;
+                        }
+                        BluetoothMessage::ReadCharacteristic(device_id, uuid, sender) => {
+                            self.handle_read_characteristic(device_id, uuid, sender)
+                                .await;
+                        }
+                        BluetoothMessage::WriteCharacteristic(device_id, uuid, value, sender) => {
+                            self.handle_write_characteristic(device_id, uuid, value, sender)
+                                .await;
+                        }
+                        BluetoothMessage::SubscribeToCharacteristic(device_id, uuid, sender) => {
+                            self.handle_subscribe_to_characteristic(device_id, uuid, sender)
+                                .await;
+                        }
+                        BluetoothMessage::UnsubscribeFromCharacteristic(device_id, uuid, sender) => {
+                            self.handle_unsubscribe_from_characteristic(device_id, uuid, sender)
+                                .await;
+                        }
+                    }
+                },
+                event = events.next() => {
+                    match event {
+                        Some(CentralEvent::DeviceDisconnected(id)) => {
+                            self.handle_device_disconnected(id).await;
+                        }
+                        Some(_) => {}
+                        None => {
+                            warn!("Adapter event stream ended unexpectedly");
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -312,6 +352,15 @@ impl BluetoothActor {
         }
     }
 
+    async fn handle_device_disconnected(&mut self, id: btleplug::platform::PeripheralId) {
+        let id_str = id.to_string();
+        if let Some(device) = self.connected_devices.remove(&id_str) {
+            warn!("Device {id_str} disconnected unexpectedly");
+            device.notifications.stop().await;
+            let _ = self.disconnect_tx.send(id_str);
+        }
+    }
+
     async fn connect(&mut self, device_id: String) -> Result<DeviceData, Error> {
         if let Some(device) = self.connected_devices.get_mut(&device_id) {
             info!("Reusing existing connection to {device_id}");
@@ -327,9 +376,54 @@ impl BluetoothActor {
             if device_id == peripheral.id().to_string() {
                 info!("Found device: {device_id}");
 
-                // Connect to the peripheral
-                peripheral.connect().await?;
-                info!("Connected to {device_id}");
+                // On BlueZ the Connect() D-Bus call performs service discovery
+                // internally, so "ServiceDiscoveryTimedOut" surfaces here rather
+                // than in discover_services(). Retry a few times with a back-off
+                // before giving up.
+                const CONNECT_RETRIES: u32 = 3;
+                const CONNECT_RETRY_DELAY_MS: u64 = 2_000;
+
+                if !peripheral.is_connected().await.unwrap_or(false) {
+                    let mut connect_err = Error::DeviceNotFound;
+                    let mut connected = false;
+                    for attempt in 1..=CONNECT_RETRIES {
+                        match peripheral.connect().await {
+                            Ok(()) => {
+                                if attempt > 1 {
+                                    info!("Connected to {device_id} on attempt {attempt}");
+                                } else {
+                                    info!("Connected to {device_id}");
+                                }
+                                connected = true;
+                                break;
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "Connect attempt {attempt}/{CONNECT_RETRIES} for \
+                                     {device_id} failed: {e:?}"
+                                );
+                                connect_err = e;
+                                if attempt < CONNECT_RETRIES {
+                                    // BlueZ keeps the failed attempt alive internally
+                                    // ("Operation already in progress"), so we must
+                                    // disconnect to purge the stale state before retrying.
+                                    if let Err(de) = peripheral.disconnect().await {
+                                        warn!("Cleanup disconnect after failed connect attempt {attempt} failed: {de:?}");
+                                    }
+                                    tokio::time::sleep(std::time::Duration::from_millis(
+                                        CONNECT_RETRY_DELAY_MS,
+                                    ))
+                                    .await;
+                                }
+                            }
+                        }
+                    }
+                    if !connected {
+                        return Err(connect_err);
+                    }
+                } else {
+                    info!("Device {device_id} already connected at OS level, skipping connect()");
+                }
 
                 let mut connected_device =
                     ConnectedDevice::start(peripheral.clone(), device_id.clone()).await?;
